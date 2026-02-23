@@ -24,6 +24,7 @@ CIFAR-10 (via Hugging Face)
 * 50,000 training / 10,000 test
 
 Model Architectures
+
 🔹 ANN (Baseline)
 * Input: Flattened 32×32×3 image (3072 features)
 * Fully connected layers
