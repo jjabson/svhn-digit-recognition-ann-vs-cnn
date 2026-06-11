@@ -9,7 +9,7 @@ This project builds and compares two deep learning approaches to recognize stree
 The goal is to demonstrate why CNNs are the standard for image classification and to provide a clean, reproducible notebook 
 that highlights data prep, modeling, evaluation, and insights.
 
-Why this matters
+**Why this matters**
 
 Digit recognition is a core computer vision task with applications in:
 * Automated address/house-number reading (maps, delivery logistics)
@@ -19,7 +19,7 @@ Digit recognition is a core computer vision task with applications in:
 SVHN is a realistic dataset because images contain natural scene variation (lighting, background clutter, blur), unlike simpler 
 handwritten digits.
 
-Dataset
+**Dataset**
 
 SVHN (Street View House Numbers)
 * Inputs: images of digits (0–9)
