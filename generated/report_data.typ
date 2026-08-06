@@ -1,0 +1,20 @@
+// This file is generated automatically.
+// Do not edit it manually.
+
+#let training-images = "42,000"
+#let validation-images = "60,000"
+#let testing-images = "18,000"
+#let image-dimensions = "32 × 32 pixels"
+#let class-summary = "10 (digits 0–9)"
+#let image-channels = "Grayscale"
+#let data-type = "Images"
+#let learning-task = "Multi-class Classification"
+#let smallest-class-count = "4,168"
+#let largest-class-count = "4,281"
+#let class-count-difference = "113"
+#let average-class-count = "4,200"
+#let training-tensor-shape = "(42,000, 32, 32, 1)"
+#let original-pixel-range = "0–255"
+#let normalized-pixel-range = "0.0–1.0"
+#let normalization-divisor = "255"
+#let one-hot-vector-length = "10"

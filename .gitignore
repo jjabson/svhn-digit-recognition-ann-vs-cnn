@@ -1,0 +1,22 @@
+# PyCharm and environments
+.idea/
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store
+
+# Large local datasets
+data/*.h5
+data/*.hdf5
+
+# Logs
+*.log
