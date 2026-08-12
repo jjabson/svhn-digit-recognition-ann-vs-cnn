@@ -412,3 +412,30 @@ generated from images with the expected dimensions, numerical scale, channel
 configuration, and tensor structure. This consistency improves reliability and
 helps the deployed model reproduce the performance observed during model
 evaluation.
+
+= CNN Architecture
+
+== High-Level Architecture
+
+#figure(
+  image(
+    "../figures/figure5_cnn_architecture.png",
+    width: 90%,
+  ),
+  caption: [
+    High-level architecture of the trained SVHN convolutional neural network.
+  ],
+) <cnn-architecture>
+
+== Detailed Layer Architecture
+
+#figure(
+  image(
+    "../figures/cnn_architecture_detailed.png",
+    width: 80%,
+  ),
+  caption: [
+    Detailed layer-by-layer architecture of the trained SVHN convolutional
+    neural network.
+  ],
+) <cnn-architecture-detailed>
