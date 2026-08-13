@@ -415,7 +415,21 @@ evaluation.
 
 = CNN Architecture
 
+The convolutional neural network was designed to progressively transform the
+preprocessed grayscale input images into increasingly abstract visual features
+before producing a probability distribution across the ten digit classes.
+
+The architecture consists of two feature-extraction blocks followed by a
+fully connected classification head. The convolutional blocks learn spatial
+patterns from the input images, while the classification head converts the
+learned feature representation into the final digit prediction.
+
 == High-Level Architecture
+
+@cnn-architecture summarizes the major stages of the trained convolutional
+neural network. The model accepts a single grayscale image with dimensions
+32 × 32 × 1 and passes it through two successive feature-extraction blocks
+before reaching the classification head.
 
 #figure(
   image(
@@ -427,15 +441,85 @@ evaluation.
   ],
 ) <cnn-architecture>
 
+The first feature-extraction block operates on the original 32 × 32 spatial
+representation and produces 32 feature maps. A max-pooling operation then
+reduces the spatial dimensions to 16 × 16.
+
+The second feature-extraction block increases the learned representation to
+64 feature maps while a second pooling operation reduces the spatial
+dimensions to 8 × 8. This pattern allows the CNN to trade spatial resolution
+for increasingly rich learned features.
+
+The resulting feature maps are passed to the classification head, where they
+are flattened into a one-dimensional representation and processed by a dense
+neural-network layer. The final softmax layer produces one probability for
+each of the ten digit classes.
+
 == Detailed Layer Architecture
+
+While @cnn-architecture presents the model at the component level,
+@cnn-architecture-detailed shows the complete layer-by-layer implementation.
+The detailed view preserves the same three architectural groups while exposing
+the transformations performed inside each block.
+
+The first feature-extraction block contains two convolutional layers with
+LeakyReLU activation, followed by max pooling and batch normalization. The
+second block repeats the same general pattern while increasing the number of
+learned feature maps.
+
+The classification head converts the final 8 × 8 × 64 feature-map tensor into
+a 4,096-element feature vector. A dense layer reduces this representation to
+32 learned features, followed by LeakyReLU activation and dropout
+regularization. The final dense layer contains ten softmax outputs corresponding
+to the digit classes 0 through 9.
+
+#pagebreak()
 
 #figure(
   image(
     "../figures/cnn_architecture_detailed.png",
-    width: 80%,
+    height: 80%,
   ),
   caption: [
     Detailed layer-by-layer architecture of the trained SVHN convolutional
     neural network.
   ],
 ) <cnn-architecture-detailed>
+
+== Model Capacity
+
+The trained CNN contains a relatively compact parameter set for an image
+classification model. Most of the model capacity is concentrated in the dense
+classification layer after the convolutional feature maps are flattened.
+
+The convolutional layers contain substantially fewer parameters because their
+filters are shared across spatial locations. In contrast, the first dense layer
+connects every element of the flattened feature representation to each of its
+output neurons, resulting in the largest parameter contribution within the
+network.
+
+This distribution of parameters reflects the different responsibilities of the
+two portions of the model: the convolutional blocks extract spatial features,
+while the dense layers combine those learned features to perform final
+classification.
+
+== Design Decisions
+
+Several architectural choices were used to improve feature learning,
+optimization stability, and generalization.
+
+The convolutional layers use 3 × 3 kernels with same padding, allowing the
+network to learn local spatial patterns while preserving feature-map dimensions
+until pooling is applied. The number of feature maps increases as the network
+becomes deeper, enabling progressively richer visual representations.
+
+LeakyReLU activation is used throughout the hidden layers so that small
+negative activations can continue to propagate rather than being forced
+entirely to zero. Max-pooling layers reduce spatial dimensionality and
+computational cost, while batch normalization helps maintain stable feature
+distributions during training.
+
+A dropout layer is included in the classification head to reduce reliance on
+individual neurons and improve generalization. Finally, the ten-unit softmax
+output layer converts the network output into a probability distribution across
+the ten SVHN digit classes.

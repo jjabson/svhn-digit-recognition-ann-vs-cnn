@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
 from tools.model.inspect_cnn import (
+    LayerInfo,
     inspect_model,
     load_trained_model,
 )
@@ -25,13 +26,13 @@ DETAILED_CNN_ARCHITECTURE_FILE = (
 )
 
 def format_layer_details(
-    layer: dict[str, object],
+    layer: LayerInfo,
 ) -> str:
     """
     Build a concise human-readable description of a CNN layer.
     """
-    layer_type = layer["layer_type"]
-    config = layer["config"]
+    layer_type = layer.layer_type
+    config = layer.config
 
     if layer_type == "Conv2D":
         return (
@@ -87,8 +88,8 @@ def create_cnn_architecture_figure() -> None:
     model = load_trained_model()
     architecture = inspect_model(model)
 
-    group_summaries = architecture["group_summaries"]
-    total_parameters = architecture["total_parameters"]
+    group_summaries = architecture.group_summaries
+    total_parameters = architecture.total_parameters
 
     # ---------------------------------
     # Prepare diagram data
@@ -105,9 +106,9 @@ def create_cnn_architecture_figure() -> None:
     ]
 
     for group in group_summaries:
-        output_shape = group["output_shape"]
+        output_shape = group.output_shape
 
-        if group["group_name"] == "Classification Head":
+        if group.group_name == "Classification Head":
             shape_text = f"{output_shape[-1]} classes"
         else:
             shape_text = (
@@ -118,10 +119,10 @@ def create_cnn_architecture_figure() -> None:
 
         diagram_items.append(
             {
-                "title": group["group_name"],
+                "title": group.group_name,
                 "details": [
-                    f'{group["number_of_layers"]} layers',
-                    f'{group["parameters"]:,} parameters',
+                    f'{group.number_of_layers} layers',
+                    f'{group.parameters:,} parameters',
                     f"Output: {shape_text}",
                 ],
             }
@@ -176,16 +177,16 @@ def create_cnn_architecture_figure() -> None:
             "y": 7.2,
             "fill": "#EEF8EC",
             "edge": "#3D7A3A",
-            "title": group_summaries[0]["group_name"],
+            "title": group_summaries[0].group_name,
             "subtitle": "Convolution + Pooling",
             "details": [
-                f'{group_summaries[0]["number_of_layers"]} layers',
-                f'{group_summaries[0]["parameters"]:,} parameters',
+                f'{group_summaries[0].number_of_layers} layers',
+                f'{group_summaries[0].parameters:,} parameters',
                 (
                     "Tensor Shape: "
-                    f'{group_summaries[0]["output_shape"][1]} × '
-                    f'{group_summaries[0]["output_shape"][2]} × '
-                    f'{group_summaries[0]["output_shape"][3]}'
+                    f'{group_summaries[0].output_shape[1]} × '
+                    f'{group_summaries[0].output_shape[2]} × '
+                    f'{group_summaries[0].output_shape[3]}'
                 ),
             ],
         },
@@ -193,16 +194,16 @@ def create_cnn_architecture_figure() -> None:
             "y": 4.1,
             "fill": "#EEF8EC",
             "edge": "#3D7A3A",
-            "title": group_summaries[1]["group_name"],
+            "title": group_summaries[1].group_name,
             "subtitle": "Convolution + Pooling",
             "details": [
-                f'{group_summaries[1]["number_of_layers"]} layers',
-                f'{group_summaries[1]["parameters"]:,} parameters',
+                f'{group_summaries[1].number_of_layers} layers',
+                f'{group_summaries[1].parameters:,} parameters',
                 (
                     "Tensor Shape: "
-                    f'{group_summaries[1]["output_shape"][1]} × '
-                    f'{group_summaries[1]["output_shape"][2]} × '
-                    f'{group_summaries[1]["output_shape"][3]}'
+                    f'{group_summaries[1].output_shape[1]} × '
+                    f'{group_summaries[1].output_shape[2]} × '
+                    f'{group_summaries[1].output_shape[3]}'
                 ),
             ],
         },
@@ -210,14 +211,14 @@ def create_cnn_architecture_figure() -> None:
             "y": 1.0,
             "fill": "#FFF6DD",
             "edge": "#C58B11",
-            "title": group_summaries[2]["group_name"],
+            "title": group_summaries[2].group_name,
             "subtitle": "Dense Neural Network",
             "details": [
-                f'{group_summaries[2]["number_of_layers"]} layers',
-                f'{group_summaries[2]["parameters"]:,} parameters',
+                f'{group_summaries[2].number_of_layers} layers',
+                f'{group_summaries[2].parameters:,} parameters',
                 (
                     "Output: "
-                    f'{group_summaries[2]["output_shape"][-1]} classes'
+                    f'{group_summaries[2].output_shape[-1]} classes'
                 ),
             ],
         },
@@ -322,7 +323,7 @@ def create_detailed_cnn_architecture_figure() -> None:
     model = load_trained_model()
     architecture = inspect_model(model)
 
-    groups = architecture["groups"]
+    groups = architecture.groups
 
     # ---------------------------------
     # Layout configuration
@@ -335,7 +336,7 @@ def create_detailed_cnn_architecture_figure() -> None:
     BOTTOM_MARGIN = 1.0
 
     total_layers = sum(
-        len(group["layers"])
+        len(group.layers)
         for group in groups
     )
 
@@ -405,7 +406,7 @@ def create_detailed_cnn_architecture_figure() -> None:
         axis.text(
             6,
             current_y,
-            group["group_name"],
+            group.group_name,
             ha="center",
             va="center",
             fontsize=13,
@@ -422,10 +423,10 @@ def create_detailed_cnn_architecture_figure() -> None:
         # Group layers
         # ---------------------------------
 
-        for layer in group["layers"]:
+        for layer in group.layers:
             layer_details = format_layer_details(layer)
 
-            output_shape = layer["output_shape"]
+            output_shape = layer.output_shape
 
             if len(output_shape) == 4:
                 shape_text = (
@@ -451,7 +452,7 @@ def create_detailed_cnn_architecture_figure() -> None:
             axis.text(
                 box_x + 0.25,
                 current_y + 0.60,
-                f'{layer["layer_number"]}. {layer["layer_type"]}',
+                f'{layer.layer_number}. {layer.layer_type}',
                 ha="left",
                 va="center",
                 fontsize=11,
