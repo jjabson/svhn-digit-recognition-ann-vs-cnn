@@ -6,6 +6,11 @@ import numpy as np
 
 from config.report_config import REPORT_METADATA
 
+from tools.model.inspect_cnn import (
+    inspect_model,
+    load_trained_model,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATA_FILE = PROJECT_ROOT / "data" / "SVHN_single_grey1.h5"
@@ -13,6 +18,52 @@ DATA_FILE = PROJECT_ROOT / "data" / "SVHN_single_grey1.h5"
 GENERATED_DIR = PROJECT_ROOT / "generated"
 
 REPORT_DATA_FILE = GENERATED_DIR / "report_data.typ"
+
+def build_model_variables() -> dict[str, str]:
+    """
+    Build Typst report variables from the trained CNN architecture.
+    """
+    model = load_trained_model()
+    architecture = inspect_model(model)
+
+    return {
+        "model-name": architecture.model_name,
+        "model-total-parameters": f"{architecture.total_parameters:,}",
+        "model-number-of-layers": str(architecture.number_of_layers),
+
+        "model-input-shape": (
+            f"{architecture.input_shape[1]} × "
+            f"{architecture.input_shape[2]} × "
+            f"{architecture.input_shape[3]}"
+        ),
+
+        "model-final-feature-shape": (
+            f"{architecture.final_feature_group.output_shape[1]} × "
+            f"{architecture.final_feature_group.output_shape[2]} × "
+            f"{architecture.final_feature_group.output_shape[3]}"
+        ),
+
+        "model-flattened-features": (
+            f"{architecture.flatten_layer.output_shape[-1]:,}"
+        ),
+
+        "model-hidden-dense-units": (
+            str(architecture.hidden_dense_layer.config["units"])
+        ),
+
+        "model-output-classes": (
+            str(architecture.output_layer.config["units"])
+        ),
+
+        "model-kernel-size": (
+            f'{architecture.first_conv.config["kernel_size"][0]} × '
+            f'{architecture.first_conv.config["kernel_size"][1]}'
+        ),
+
+        "model-dropout-rate": (
+            str(architecture.dropout_layer.config["rate"])
+        ),
+    }
 
 def load_dataset_metadata() -> dict[str, int]:
     """
@@ -134,6 +185,7 @@ def build_report_variables(
         **build_dataset_variables(metadata),
         **build_eda_variables(metadata),
         **build_preprocessing_variables(metadata),
+        **build_model_variables(),
     }
 
 def create_typst_report_data(metadata: dict[str, int]) -> None:

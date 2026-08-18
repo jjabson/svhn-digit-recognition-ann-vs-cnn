@@ -88,7 +88,7 @@ def create_cnn_architecture_figure() -> None:
     model = load_trained_model()
     architecture = inspect_model(model)
 
-    group_summaries = architecture.group_summaries
+    group_summaries = architecture.groups
     total_parameters = architecture.total_parameters
 
     # ---------------------------------

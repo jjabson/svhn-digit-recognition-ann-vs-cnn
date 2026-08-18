@@ -428,7 +428,7 @@ learned feature representation into the final digit prediction.
 
 @cnn-architecture summarizes the major stages of the trained convolutional
 neural network. The model accepts a single grayscale image with dimensions
-32 × 32 × 1 and passes it through two successive feature-extraction blocks
+#model-input-shape and passes it through two successive feature-extraction blocks
 before reaching the classification head.
 
 #figure(
@@ -467,10 +467,10 @@ LeakyReLU activation, followed by max pooling and batch normalization. The
 second block repeats the same general pattern while increasing the number of
 learned feature maps.
 
-The classification head converts the final 8 × 8 × 64 feature-map tensor into
-a 4,096-element feature vector. A dense layer reduces this representation to
-32 learned features, followed by LeakyReLU activation and dropout
-regularization. The final dense layer contains ten softmax outputs corresponding
+The classification head converts the final #model-final-feature-shape feature-map tensor into
+a #model-flattened-features element feature vector. A dense layer reduces this representation to
+#model-hidden-dense-units learned features, followed by LeakyReLU activation and dropout
+regularization. The final dense layer contains #model-output-classes softmax outputs corresponding
 to the digit classes 0 through 9.
 
 #pagebreak()
@@ -488,9 +488,11 @@ to the digit classes 0 through 9.
 
 == Model Capacity
 
-The trained CNN contains a relatively compact parameter set for an image
-classification model. Most of the model capacity is concentrated in the dense
-classification layer after the convolutional feature maps are flattened.
+The trained CNN contains #model-total-parameters parameters distributed
+across #model-number-of-layers layers, resulting in a relatively compact
+architecture for an image classification model. Most of the model capacity
+is concentrated in the dense classification layer after the convolutional
+feature maps are flattened.
 
 The convolutional layers contain substantially fewer parameters because their
 filters are shared across spatial locations. In contrast, the first dense layer
@@ -508,7 +510,7 @@ classification.
 Several architectural choices were used to improve feature learning,
 optimization stability, and generalization.
 
-The convolutional layers use 3 × 3 kernels with same padding, allowing the
+The convolutional layers use #model-kernel-size kernels with same padding, allowing the
 network to learn local spatial patterns while preserving feature-map dimensions
 until pooling is applied. The number of feature maps increases as the network
 becomes deeper, enabling progressively richer visual representations.

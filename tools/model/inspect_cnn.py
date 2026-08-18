@@ -18,19 +18,35 @@ class LayerInfo:
     parameters: int
     config: dict[str, object] = field(default_factory=dict)
 
-
 @dataclass
 class GroupInfo:
     group_name: str
     layers: list[LayerInfo]
 
+    @property
+    def number_of_layers(self) -> int:
+        """
+        Return the number of layers in this architecture group.
+        """
+        return len(self.layers)
 
-@dataclass
-class GroupSummary:
-    group_name: str
-    number_of_layers: int
-    parameters: int
-    output_shape: tuple
+    @property
+    def parameters(self) -> int:
+        """
+        Return the total parameter count for this architecture group.
+        """
+        return sum(
+            layer.parameters
+            for layer in self.layers
+        )
+
+    @property
+    def output_shape(self) -> tuple:
+        """
+        Return the output shape of the final layer in this group.
+        """
+        return self.layers[-1].output_shape
+
 
 
 @dataclass
@@ -42,7 +58,64 @@ class ArchitectureInfo:
     number_of_layers: int
     layers: list[LayerInfo]
     groups: list[GroupInfo]
-    group_summaries: list[GroupSummary]
+
+    @property
+    def first_conv(self) -> LayerInfo:
+        return next(
+            layer
+            for layer in self.layers
+            if layer.layer_type == "Conv2D"
+        )
+
+    @property
+    def flatten_layer(self) -> LayerInfo:
+        return next(
+            layer
+            for layer in self.layers
+            if layer.layer_type == "Flatten"
+        )
+
+    @property
+    def dropout_layer(self) -> LayerInfo:
+        return next(
+            layer
+            for layer in self.layers
+            if layer.layer_type == "Dropout"
+        )
+
+    @property
+    def output_layer(self) -> LayerInfo:
+        return next(
+            layer
+            for layer in reversed(self.layers)
+            if layer.layer_type == "Dense"
+        )
+
+    @property
+    def hidden_dense_layer(self) -> LayerInfo:
+        dense_layers = [
+            layer
+            for layer in self.layers
+            if layer.layer_type == "Dense"
+        ]
+
+        return dense_layers[0]
+
+    @property
+    def feature_extraction_block1(self) -> GroupInfo:
+        return self.groups[0]
+
+    @property
+    def feature_extraction_block2(self) -> GroupInfo:
+        return self.groups[1]
+
+    @property
+    def classification_head(self) -> GroupInfo:
+        return self.groups[2]
+
+    @property
+    def final_feature_group(self) -> GroupInfo:
+        return self.groups[-2]
 
 
 @dataclass
@@ -164,29 +237,6 @@ def group_model_layers(
         ),
     ]
 
-def summarize_model_groups(
-    groups: list[GroupInfo],
-) -> list[GroupSummary]:
-    """
-    Build summary statistics for each architectural model group.
-    """
-    summaries = []
-
-    for group in groups:
-        summaries.append(
-            GroupSummary(
-                group_name=group.group_name,
-                number_of_layers=len(group.layers),
-                parameters=sum(
-                    layer.parameters
-                    for layer in group.layers
-                ),
-                output_shape=group.layers[-1].output_shape,
-            )
-        )
-
-    return summaries
-
 def inspect_model(
     model: keras.Model,
 ) -> ArchitectureInfo:
@@ -197,7 +247,6 @@ def inspect_model(
     summary = inspect_model_summary(model)
     layers = inspect_model_layers(model)
     groups = group_model_layers(layers)
-    group_summaries = summarize_model_groups(groups)
 
     return ArchitectureInfo(
         model_name=summary.model_name,
@@ -207,7 +256,6 @@ def inspect_model(
         number_of_layers=summary.number_of_layers,
         layers=layers,
         groups=groups,
-        group_summaries=group_summaries,
     )
 
 def main() -> None:
@@ -230,16 +278,21 @@ def main() -> None:
     print("\nArchitecture Groups")
     print("-------------------")
 
-    for group, summary in zip(
-        architecture.groups,
-        architecture.group_summaries,
-    ):
+    for group in architecture.groups:
         print(
             f"{group.group_name}: "
-            f"{summary.number_of_layers} layers, "
-            f"{summary.parameters:,} parameters, "
-            f"output={summary.output_shape}"
+            f"{group.number_of_layers} layers, "
+            f"{group.parameters:,} parameters, "
+            f"output={group.output_shape}"
         )
+    print("\nSemantic Layer Access")
+    print("---------------------")
+    print(f"First Conv2D: {architecture.first_conv.layer_name}")
+    print(f"Flatten: {architecture.flatten_layer.layer_name}")
+    print(f"Hidden Dense: {architecture.hidden_dense_layer.layer_name}")
+    print(f"Dropout: {architecture.dropout_layer.layer_name}")
+    print(f"Output Dense: {architecture.output_layer.layer_name}")
+
 
 
 if __name__ == "__main__":
