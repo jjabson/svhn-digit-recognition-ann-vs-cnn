@@ -73,6 +73,20 @@
 
 #pagebreak()
 
+#outline(
+  title: [List of Figures],
+  target: figure.where(kind: image),
+)
+
+#pagebreak()
+
+#outline(
+  title: [List of Tables],
+  target: figure.where(kind: table),
+)
+
+#pagebreak()
+
 = Executive Summary
 
 This report documents the development and deployment of a convolutional
@@ -504,6 +518,37 @@ This distribution of parameters reflects the different responsibilities of the
 two portions of the model: the convolutional blocks extract spatial features,
 while the dense layers combine those learned features to perform final
 classification.
+
+== Architecture Summary
+
+The table below summarizes the primary structural characteristics of the
+trained convolutional neural network.
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    inset: 8pt,
+    stroke: 0.8pt,
+
+    table.header(
+      [*Architecture Property*],
+      [*Value*],
+    ),
+
+    [Input Shape], [#model-input-shape],
+    [Total Layers], [#model-number-of-layers],
+    [Total Parameters], [#model-total-parameters],
+    [Final Feature Shape], [#model-final-feature-shape],
+    [Flattened Features], [#model-flattened-features],
+    [Hidden Dense Units], [#model-hidden-dense-units],
+    [Output Classes], [#model-output-classes],
+    [Convolution Kernel], [#model-kernel-size],
+    [Dropout Rate], [#model-dropout-rate],
+  ),
+  caption: [
+    Summary of the trained CNN architecture and model capacity.
+  ],
+) <architecture-summary>
 
 == Design Decisions
 
