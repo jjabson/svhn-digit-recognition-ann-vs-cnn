@@ -1,6 +1,3 @@
-
-from pathlib import Path
-
 import h5py
 import numpy as np
 
@@ -11,13 +8,11 @@ from tools.model.inspect_cnn import (
     load_trained_model,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-DATA_FILE = PROJECT_ROOT / "data" / "SVHN_single_grey1.h5"
-
-GENERATED_DIR = PROJECT_ROOT / "generated"
-
-REPORT_DATA_FILE = GENERATED_DIR / "report_data.typ"
+from config.project_paths import (
+    DATA_FILE,
+    GENERATED_DIR,
+    REPORT_DATA_FILE,
+)
 
 def build_model_variables() -> dict[str, str]:
     """

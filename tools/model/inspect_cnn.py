@@ -1,13 +1,7 @@
-from pathlib import Path
-
 from tensorflow import keras
 
 from dataclasses import dataclass, field
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-MODEL_FILE = PROJECT_ROOT / "models" / "svhn_cnn.keras"
+from config.project_paths import MODEL_FILE
 
 @dataclass
 class LayerInfo:

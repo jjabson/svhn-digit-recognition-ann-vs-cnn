@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
@@ -10,8 +8,7 @@ from tools.model.inspect_cnn import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FIGURES_DIR = PROJECT_ROOT / "figures"
+from config.project_paths import FIGURES_DIR
 
 CNN_ARCHITECTURE_FILE = (
     FIGURES_DIR / "figure5_cnn_architecture.png"

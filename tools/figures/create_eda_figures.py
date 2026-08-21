@@ -6,11 +6,11 @@ import numpy as np
 from PIL import Image
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-DATA_FILE = PROJECT_ROOT / "data" / "SVHN_single_grey1.h5"
-SAMPLE_IMAGES_DIR = PROJECT_ROOT / "sample_images"
-FIGURES_DIR = PROJECT_ROOT / "figures"
+from config.project_paths import (
+    DATA_FILE,
+    FIGURES_DIR,
+    SAMPLE_IMAGES_DIR,
+)
 
 OUTPUT_FILE = FIGURES_DIR / "figure1_sample_digits.png"
 

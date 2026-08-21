@@ -1,12 +1,12 @@
-from pathlib import Path
 import subprocess
 import sys
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-REPORT_SOURCE = PROJECT_ROOT / "reports" / "svhn_report.typ"
-REPORT_OUTPUT = PROJECT_ROOT / "reports" / "svhn_report.pdf"
+from config.project_paths import (
+    PROJECT_ROOT,
+    REPORT_OUTPUT,
+    REPORT_SOURCE,
+)
 
 
 def run_python_module(module_name: str) -> None:

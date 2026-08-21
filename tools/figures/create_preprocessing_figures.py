@@ -1,15 +1,13 @@
-from pathlib import Path
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib.ticker import FuncFormatter
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-DATA_FILE = PROJECT_ROOT / "data" / "SVHN_single_grey1.h5"
-FIGURES_DIR = PROJECT_ROOT / "figures"
+from config.project_paths import (
+    DATA_FILE,
+    FIGURES_DIR,
+)
 
 NORMALIZATION_COMPARISON_FILE = (
     FIGURES_DIR / "figure3_normalization_comparison.png"

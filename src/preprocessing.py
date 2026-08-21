@@ -48,3 +48,42 @@ def preprocess_image_bytes(image_bytes: bytes) -> np.ndarray:
     image_array /= 255.0
 
     return image_array.reshape(1, 32, 32, 1)
+
+def preprocess_image_batch(images: np.ndarray) -> np.ndarray:
+    """
+    Convert a batch of grayscale images into normalized CNN input tensors.
+
+    Parameters
+    ----------
+    images : np.ndarray
+        Array with shape (n_samples, 32, 32).
+
+    Returns
+    -------
+    np.ndarray
+        Array with shape (n_samples, 32, 32, 1) and float32
+        values in the range [0, 1].
+    """
+
+    if images.ndim != 3:
+        raise ValueError(
+            "Expected image batch with shape "
+            "(n_samples, 32, 32)."
+        )
+
+    if images.shape[1:] != IMAGE_SIZE:
+        raise ValueError(
+            f"Expected image dimensions {IMAGE_SIZE}, "
+            f"received {images.shape[1:]}."
+        )
+
+    processed_images = images.astype(
+        np.float32
+    ) / 255.0
+
+    return processed_images.reshape(
+        -1,
+        IMAGE_SIZE[0],
+        IMAGE_SIZE[1],
+        1,
+    )

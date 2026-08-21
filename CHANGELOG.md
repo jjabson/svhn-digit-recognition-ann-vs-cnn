@@ -50,3 +50,30 @@
 ### Result
 - Python is now the single source of truth for architecture metadata.
 - Typst consumes generated model variables rather than duplicated values.
+
+### Added
+- Added a reusable evaluation domain model with `EvaluationProtocol`,
+  `ClassMetrics`, and `EvaluationInfo`.
+- Added model-agnostic prediction evaluation for accuracy, precision,
+  recall, F1 score, support, and confusion matrices.
+- Added correct and incorrect prediction metrics.
+- Added historical SVHN evaluation data reconstruction using the original
+  stratified 80/20 notebook protocol.
+- Added batch image preprocessing for model evaluation.
+- Added shared project path configuration in `config/project_paths.py`.
+
+### Changed
+- Centralized dataset, model, figure, generated-data, and report paths.
+- Updated report, figure, model inspection, and evaluation tooling to use
+  shared project paths.
+- Reproduced the historical CNN evaluation directly from the saved model
+  and evaluation data instead of relying on previously generated CSV
+  artifacts.
+
+### Validation
+- Historical evaluation reproduced 95.14% test accuracy and approximately
+  95.14% macro F1 across 24,000 evaluation samples.
+- Historical evaluation produced 22,833 correct predictions and 1,167
+  incorrect predictions.
+- Full Typst report build completed successfully after the shared-path
+  refactor.
