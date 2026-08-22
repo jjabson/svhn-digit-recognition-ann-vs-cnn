@@ -77,3 +77,33 @@
   incorrect predictions.
 - Full Typst report build completed successfully after the shared-path
   refactor.
+
+## Phase 4.3 – Evaluation Protocol Comparison
+
+### Added
+- Added `EvaluationComparison` for semantic access to multiple evaluation results.
+- Added support for the original HDF5 test split as a second evaluation protocol.
+- Added provenance metadata to `EvaluationProtocol`.
+- Added semantic properties for evaluation independence and accuracy percentage.
+- Added comparison support for historical holdout and original test diagnostics.
+
+### Changed
+- Refactored `evaluate_trained_model()` to accept a reusable evaluation data loader.
+- Replaced hardcoded historical evaluation loading with protocol-driven evaluation.
+- Preserved evaluation meaning alongside computed metrics.
+
+### Validation
+- Historical Stratified Holdout:
+  - Accuracy: 95.14%
+  - Macro F1: 95.14%
+  - Support: 24,000
+  - Correct: 22,833
+  - Incorrect: 1,167
+
+- Original HDF5 Test Diagnostic:
+  - Accuracy: 96.84%
+  - Macro F1: 96.84%
+  - Support: 18,000
+  - Correct: 17,432
+  - Incorrect: 568
+  - Not independent of historical training
