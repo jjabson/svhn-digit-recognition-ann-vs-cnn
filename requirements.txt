@@ -6,3 +6,4 @@ numpy
 pillow
 h5py
 matplotlib
+scikit-learn
