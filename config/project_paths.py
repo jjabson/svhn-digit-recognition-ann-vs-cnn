@@ -16,3 +16,5 @@ MODEL_FILE = MODELS_DIR / "svhn_cnn.keras"
 REPORT_SOURCE = REPORTS_DIR / "svhn_report.typ"
 REPORT_OUTPUT = REPORTS_DIR / "svhn_report.pdf"
 REPORT_DATA_FILE = GENERATED_DIR / "report_data.typ"
+
+DATABASE_FILE = GENERATED_DIR / "ml_framework.db"

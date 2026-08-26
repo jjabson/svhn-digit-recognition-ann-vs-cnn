@@ -14,6 +14,10 @@ from config.project_paths import (
     REPORT_DATA_FILE,
 )
 
+from tools.evaluation.evaluation_store import (
+    load_evaluation_comparison,
+)
+
 def build_model_variables() -> dict[str, str]:
     """
     Build Typst report variables from the trained CNN architecture.
@@ -59,6 +63,99 @@ def build_model_variables() -> dict[str, str]:
             str(architecture.dropout_layer.config["rate"])
         ),
     }
+
+def build_evaluation_variables() -> dict[str, str]:
+    """
+    Build Typst report variables from model evaluation results.
+    """
+    comparison = load_evaluation_comparison()
+
+    historical = comparison.historical
+    diagnostic = comparison.original_test
+
+    variables = {
+        "evaluation-accuracy": (
+            f"{historical.accuracy_percent:.2f}%"
+        ),
+        "evaluation-macro-precision": (
+            f"{historical.macro_precision * 100:.2f}%"
+        ),
+        "evaluation-macro-recall": (
+            f"{historical.macro_recall * 100:.2f}%"
+        ),
+        "evaluation-macro-f1": (
+            f"{historical.macro_f1 * 100:.2f}%"
+        ),
+        "evaluation-support": (
+            f"{historical.total_support:,}"
+        ),
+        "evaluation-correct": (
+            f"{historical.correct_predictions:,}"
+        ),
+        "evaluation-incorrect": (
+            f"{historical.incorrect_predictions:,}"
+        ),
+        "diagnostic-accuracy": (
+            f"{diagnostic.accuracy_percent:.2f}%"
+        ),
+        "diagnostic-macro-f1": (
+            f"{diagnostic.macro_f1 * 100:.2f}%"
+        ),
+        "diagnostic-support": (
+            f"{diagnostic.total_support:,}"
+        ),
+        "evaluation-protocol-name": (
+            historical.protocol.protocol_name
+        ),
+        "evaluation-independent": (
+            "Yes"
+            if historical.protocol.independent_of_training
+            else "No"
+        ),
+        "evaluation-protocol-description": (
+            historical.protocol.description
+        ),
+
+        "diagnostic-protocol-name": (
+            diagnostic.protocol.protocol_name
+        ),
+        "diagnostic-independent": (
+            "Yes"
+            if diagnostic.protocol.independent_of_training
+            else "No"
+        ),
+        "diagnostic-protocol-description": (
+            diagnostic.protocol.description
+        ),
+        "diagnostic-macro-precision": (
+            f"{diagnostic.macro_precision * 100:.2f}%"
+        ),
+        "diagnostic-macro-recall": (
+            f"{diagnostic.macro_recall * 100:.2f}%"
+        ),
+    }
+
+    for metrics in historical.class_metrics:
+        class_label = metrics.class_label
+
+        variables.update(
+            {
+                f"evaluation-class-{class_label}-precision": (
+                    f"{metrics.precision * 100:.2f}%"
+                ),
+                f"evaluation-class-{class_label}-recall": (
+                    f"{metrics.recall * 100:.2f}%"
+                ),
+                f"evaluation-class-{class_label}-f1": (
+                    f"{metrics.f1_score * 100:.2f}%"
+                ),
+                f"evaluation-class-{class_label}-support": (
+                    f"{metrics.support:,}"
+                ),
+            }
+        )
+
+    return variables
 
 def load_dataset_metadata() -> dict[str, int]:
     """
@@ -181,6 +278,7 @@ def build_report_variables(
         **build_eda_variables(metadata),
         **build_preprocessing_variables(metadata),
         **build_model_variables(),
+        **build_evaluation_variables(),
     }
 
 def create_typst_report_data(metadata: dict[str, int]) -> None:

@@ -52,6 +52,7 @@ def main() -> None:
     run_python_module("tools.figures.create_eda_figures")
     run_python_module("tools.figures.create_preprocessing_figures")
     run_python_module("tools.figures.create_model_figures")
+    run_python_module("tools.figures.create_evaluation_figures")
     compile_typst_report()
 
     print(f"\nReport build completed successfully: {REPORT_OUTPUT}")

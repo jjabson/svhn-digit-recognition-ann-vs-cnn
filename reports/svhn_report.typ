@@ -570,3 +570,214 @@ A dropout layer is included in the classification head to reduce reliance on
 individual neurons and improve generalization. Finally, the ten-unit softmax
 output layer converts the network output into a probability distribution across
 the ten SVHN digit classes.
+
+= Model Evaluation
+
+The trained convolutional neural network was evaluated using the historical
+stratified holdout protocol. This evaluation used #evaluation-support images
+that were excluded from the corresponding training partition.
+
+== Overall Performance
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    inset: 8pt,
+    stroke: 0.8pt,
+
+    table.header(
+      [*Metric*],
+      [*Value*],
+    ),
+
+    [Accuracy], [#evaluation-accuracy],
+    [Macro Precision], [#evaluation-macro-precision],
+    [Macro Recall], [#evaluation-macro-recall],
+    [Macro F1], [#evaluation-macro-f1],
+    [Correct Predictions], [#evaluation-correct],
+    [Incorrect Predictions], [#evaluation-incorrect],
+    [Evaluation Samples], [#evaluation-support],
+  ),
+  caption: [
+    Overall classification performance on the independent historical holdout.
+  ],
+) <evaluation-summary>
+
+== Per-Class Performance
+
+Overall metrics summarize model performance across the complete evaluation
+dataset, but they can hide differences between individual digit classes.
+The table below reports precision, recall, and F1 score for each SVHN digit
+class using the independent historical holdout.
+
+#figure(
+  table(
+    columns: (0.6fr, 1fr, 1fr, 1fr, 1fr),
+    inset: 7pt,
+    stroke: 0.8pt,
+
+    table.header(
+      [*Digit*],
+      [*Precision*],
+      [*Recall*],
+      [*F1 Score*],
+      [*Support*],
+    ),
+
+    [0],
+    [#evaluation-class-0-precision],
+    [#evaluation-class-0-recall],
+    [#evaluation-class-0-f1],
+    [#evaluation-class-0-support],
+
+    [1],
+    [#evaluation-class-1-precision],
+    [#evaluation-class-1-recall],
+    [#evaluation-class-1-f1],
+    [#evaluation-class-1-support],
+
+    [2],
+    [#evaluation-class-2-precision],
+    [#evaluation-class-2-recall],
+    [#evaluation-class-2-f1],
+    [#evaluation-class-2-support],
+
+    [3],
+    [#evaluation-class-3-precision],
+    [#evaluation-class-3-recall],
+    [#evaluation-class-3-f1],
+    [#evaluation-class-3-support],
+
+    [4],
+    [#evaluation-class-4-precision],
+    [#evaluation-class-4-recall],
+    [#evaluation-class-4-f1],
+    [#evaluation-class-4-support],
+
+    [5],
+    [#evaluation-class-5-precision],
+    [#evaluation-class-5-recall],
+    [#evaluation-class-5-f1],
+    [#evaluation-class-5-support],
+
+    [6],
+    [#evaluation-class-6-precision],
+    [#evaluation-class-6-recall],
+    [#evaluation-class-6-f1],
+    [#evaluation-class-6-support],
+
+    [7],
+    [#evaluation-class-7-precision],
+    [#evaluation-class-7-recall],
+    [#evaluation-class-7-f1],
+    [#evaluation-class-7-support],
+
+    [8],
+    [#evaluation-class-8-precision],
+    [#evaluation-class-8-recall],
+    [#evaluation-class-8-f1],
+    [#evaluation-class-8-support],
+
+    [9],
+    [#evaluation-class-9-precision],
+    [#evaluation-class-9-recall],
+    [#evaluation-class-9-f1],
+    [#evaluation-class-9-support],
+  ),
+  caption: [
+    Per-class classification performance on the independent historical
+    holdout.
+  ],
+) <per-class-performance>
+
+Performance is consistently strong across all ten classes, with F1 scores
+remaining above 93%. Digit 0 achieves the strongest F1 score, while digit 3
+has the lowest class-level F1 score because of comparatively lower recall.
+Because every class contains the same number of evaluation samples, these
+differences reflect classification behavior rather than class imbalance.
+
+== Confusion Matrix
+
+The confusion matrix provides a class-level view of the CNN's prediction
+behavior on the independent historical holdout. Rows represent the true digit
+class, while columns represent the digit predicted by the model. Values along
+the main diagonal correspond to correct classifications, while off-diagonal
+values identify misclassification patterns.
+
+#figure(
+  image(
+    "../figures/confusion_matrix_historical_holdout.png",
+    width: 90%,
+  ),
+  caption: [
+    Confusion matrix for the trained CNN on the independent historical
+    holdout evaluation.
+  ],
+) <evaluation-confusion-matrix>
+
+The strong concentration of predictions along the main diagonal is consistent
+with the model's overall accuracy. Misclassifications are comparatively sparse,
+although some digit pairs show greater confusion than others. These patterns
+provide more detailed information about model behavior than aggregate accuracy
+alone.
+
+== Evaluation Protocol Comparison
+
+The trained CNN was evaluated using two different protocols. The historical
+stratified holdout is treated as the primary evaluation because its evaluation
+samples were excluded from the corresponding training partition. The original
+HDF5 test split is retained as a diagnostic comparison because those samples
+were included in the combined dataset used during the historical training
+split.
+
+#figure(
+  table(
+    columns: (1.4fr, 1fr, 1fr),
+    inset: 7pt,
+    stroke: 0.8pt,
+
+    table.header(
+      [*Metric*],
+      [*#evaluation-protocol-name*],
+      [*#diagnostic-protocol-name*],
+    ),
+
+    [Accuracy],
+    [#evaluation-accuracy],
+    [#diagnostic-accuracy],
+
+    [Macro Precision],
+    [#evaluation-macro-precision],
+    [#diagnostic-macro-precision],
+
+    [Macro Recall],
+    [#evaluation-macro-recall],
+    [#diagnostic-macro-recall],
+
+    [Macro F1],
+    [#evaluation-macro-f1],
+    [#diagnostic-macro-f1],
+
+    [Evaluation Samples],
+    [#evaluation-support],
+    [#diagnostic-support],
+
+    [Independent of Training],
+    [#evaluation-independent],
+    [#diagnostic-independent],
+  ),
+  caption: [
+    Comparison of the independent historical holdout and original HDF5 test
+    diagnostic evaluation protocols.
+  ],
+) <evaluation-protocol-comparison>
+
+Although the original HDF5 test diagnostic produces slightly higher accuracy
+and F1 scores, it is not considered an independent held-out evaluation because
+those samples participated in the combined dataset used during the historical
+training split. The historical stratified holdout therefore provides the more
+appropriate measure of generalization for the saved CNN.
+
+The historical protocol is defined as follows: #evaluation-protocol-description
+
+The diagnostic protocol is defined as follows: #diagnostic-protocol-description
