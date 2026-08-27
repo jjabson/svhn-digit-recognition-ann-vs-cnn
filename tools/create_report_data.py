@@ -14,8 +14,10 @@ from config.project_paths import (
     REPORT_DATA_FILE,
 )
 
-from tools.evaluation.evaluation_store import (
-    load_evaluation_comparison,
+
+from tools.evaluation.evaluation_service import (
+    get_evaluation_comparison,
+    get_evaluation_insights,
 )
 
 def build_model_variables() -> dict[str, str]:
@@ -68,10 +70,15 @@ def build_evaluation_variables() -> dict[str, str]:
     """
     Build Typst report variables from model evaluation results.
     """
-    comparison = load_evaluation_comparison()
+    comparison = get_evaluation_comparison()
 
     historical = comparison.historical
     diagnostic = comparison.original_test
+
+    insights = get_evaluation_insights(
+        historical
+    )
+
 
     variables = {
         "evaluation-accuracy": (
@@ -132,6 +139,31 @@ def build_evaluation_variables() -> dict[str, str]:
         ),
         "diagnostic-macro-recall": (
             f"{diagnostic.macro_recall * 100:.2f}%"
+        ),
+        "evaluation-best-class": (
+            str(insights.best_class.class_label)
+        ),
+        "evaluation-best-class-f1": (
+            f"{insights.best_class.f1_score * 100:.2f}%"
+        ),
+        "evaluation-worst-class": (
+            str(insights.worst_class.class_label)
+        ),
+        "evaluation-worst-class-f1": (
+            f"{insights.worst_class.f1_score * 100:.2f}%"
+        ),
+        "evaluation-top-misclassification-true": (
+            str(
+                insights.most_common_misclassification_true
+            )
+        ),
+        "evaluation-top-misclassification-predicted": (
+            str(
+                insights.most_common_misclassification_predicted
+            )
+        ),
+        "evaluation-top-misclassification-count": (
+            f"{insights.most_common_misclassification_count:,}"
         ),
     }
 

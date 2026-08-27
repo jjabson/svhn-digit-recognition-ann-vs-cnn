@@ -107,3 +107,40 @@
   - Correct: 17,432
   - Incorrect: 568
   - Not independent of historical training
+
+## Phase 4.4 — Persisted Model Evaluation Reporting
+
+### Added
+- Added SQLite persistence for model evaluation results.
+- Added evaluation storage and retrieval through `evaluation_store.py`.
+- Added serialization and reconstruction of evaluation protocols, aggregate metrics, per-class metrics, and confusion matrices.
+- Persisted both the Historical Stratified Holdout and Original HDF5 Test Diagnostic evaluation results.
+- Added semantic evaluation variables for strongest class, weakest class, and most common misclassification.
+- Added an evaluation protocol comparison section to the generated report.
+- Added `scikit-learn` as an explicit project dependency.
+
+### Changed
+- Updated report generation to consume persisted evaluation results instead of rerunning CNN inference.
+- Updated evaluation figure generation to consume persisted evaluation data.
+- Established the Historical Stratified Holdout evaluation as the authoritative independent evaluation for the saved CNN.
+- Classified the Original HDF5 Test evaluation as diagnostic because its samples were included in the historical combined training/evaluation dataset.
+- Improved confusion-matrix presentation and reporting.
+- Reduced redundant model evaluation during report builds.
+
+## Phase 4.5 — API Readiness and Evaluation Intelligence
+
+### Added
+- Added an evaluation service layer to separate application logic from SQLite persistence.
+- Added semantic evaluation helpers for identifying the best-performing class, weakest-performing class, and most common misclassification.
+- Added `EvaluationInsights` as a domain-level container for derived evaluation intelligence.
+- Added Pydantic response schemas to define stable public API contracts for evaluation data.
+- Added `GET /evaluation/insights` endpoint backed by persisted evaluation results.
+- Added Swagger/OpenAPI response examples for evaluation insights.
+- Added FastAPI endpoint groups for System, Prediction, and Evaluation.
+
+### Changed
+- Improved FastAPI application metadata, endpoint summaries, descriptions, and Swagger organization.
+- Updated report-data generation to consume evaluation intelligence through the service layer.
+- Kept API response formatting separate from internal evaluation domain models and persistence structures.
+
+---

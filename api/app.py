@@ -5,6 +5,15 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from src.inference import SVHNPredictor
 from src.preprocessing import InvalidImageError
 
+from src.schemas.evaluation import (
+    EvaluationInsightsResponse,
+    evaluation_insights_to_response,
+)
+
+from tools.evaluation.evaluation_service import (
+    get_evaluation_insights,
+    get_primary_evaluation,
+)
 
 predictor: SVHNPredictor | None = None
 
@@ -20,28 +29,62 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="SVHN Digit Recognition API",
     description=(
-        "Classifies cropped digit images using a convolutional "
-        "neural network trained on SVHN data."
+        "Production-oriented API for SVHN digit classification, "
+        "model evaluation insights, and ML engineering diagnostics."
     ),
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.1.0",
+    lifespan=lifespan,
+    contact={
+        "name": "SVHN ML Engineering Project",
+    },
+    openapi_tags=[
+        {
+            "name": "System",
+            "description": (
+                "Service health and API information."
+            ),
+        },
+        {
+            "name": "Prediction",
+            "description": (
+                "Run CNN inference on uploaded digit images."
+            ),
+        },
+        {
+            "name": "Evaluation",
+            "description": (
+                "Inspect persisted model-evaluation metrics "
+                "and derived evaluation intelligence."
+            ),
+        },
+    ],
 )
 
-
-@app.get("/")
-def root() -> dict[str, str]:
+@app.get(
+    "/",
+    tags=["System"],
+    summary="API information",
+)
+def root():
     return {
-        "name": "SVHN Digit Recognition API",
-        "documentation": "/docs"
+        "message": "SVHN Digit Recognition API",
+        "docs": "/docs",
     }
 
-
-@app.get("/health")
-def health() -> dict[str, str]:
+@app.get(
+    "/health",
+    tags=["System"],
+    summary="Health check",
+)
+def health()-> dict[str, str]:
     return {"status": "healthy"}
 
 
-@app.post("/predict")
+@app.post(
+    "/predict",
+    tags=["Prediction"],
+    summary="Predict a digit",
+)
 async def predict_digit(
     file: UploadFile = File(...)
 ) -> dict:
@@ -72,3 +115,29 @@ async def predict_digit(
             status_code=400,
             detail=str(exc)
         ) from exc
+
+
+@app.get(
+    "/evaluation/insights",
+    response_model=EvaluationInsightsResponse,
+    tags=["Evaluation"],
+    summary="Get evaluation insights",
+    description=(
+        "Returns high-level insights derived from the primary "
+        "independent model evaluation."
+    ),
+)
+
+def evaluation_insights() -> EvaluationInsightsResponse:
+    """
+    Return high-level insights from the primary model evaluation.
+    """
+    evaluation = get_primary_evaluation()
+
+    insights = get_evaluation_insights(
+        evaluation
+    )
+
+    return evaluation_insights_to_response(
+        insights
+    )

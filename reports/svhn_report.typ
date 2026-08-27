@@ -691,10 +691,12 @@ class using the independent historical holdout.
 ) <per-class-performance>
 
 Performance is consistently strong across all ten classes, with F1 scores
-remaining above 93%. Digit 0 achieves the strongest F1 score, while digit 3
-has the lowest class-level F1 score because of comparatively lower recall.
-Because every class contains the same number of evaluation samples, these
-differences reflect classification behavior rather than class imbalance.
+remaining above 93%. Digit #evaluation-best-class achieves the strongest
+class-level F1 score at #evaluation-best-class-f1, while digit
+#evaluation-worst-class has the lowest F1 score at
+#evaluation-worst-class-f1. Because every class contains the same number of
+evaluation samples, these differences reflect classification behavior rather
+than class imbalance.
 
 == Confusion Matrix
 
@@ -716,8 +718,10 @@ values identify misclassification patterns.
 ) <evaluation-confusion-matrix>
 
 The strong concentration of predictions along the main diagonal is consistent
-with the model's overall accuracy. Misclassifications are comparatively sparse,
-although some digit pairs show greater confusion than others. These patterns
+with the model's overall accuracy. The most common misclassification occurs
+when true digit #evaluation-top-misclassification-true is predicted as digit
+#evaluation-top-misclassification-predicted, which occurs
+#evaluation-top-misclassification-count times. These class-level error patterns
 provide more detailed information about model behavior than aggregate accuracy
 alone.
 

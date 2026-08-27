@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from config.project_paths import FIGURES_DIR
-from tools.evaluation.evaluation_store import (
-    load_evaluation_comparison,
+from tools.evaluation.evaluation_service import (
+    get_primary_evaluation,
 )
 
 def create_confusion_matrix_figure(
@@ -15,8 +15,7 @@ def create_confusion_matrix_figure(
     Create the confusion matrix figure for the independent
     historical holdout evaluation.
     """
-    comparison = load_evaluation_comparison()
-    evaluation = comparison.historical
+    evaluation = get_primary_evaluation()
 
     confusion_matrix = evaluation.confusion_matrix
 
