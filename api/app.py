@@ -4,13 +4,20 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from src.inference import SVHNPredictor
 from src.preprocessing import InvalidImageError
+from src.schemas.prediction import PredictionResponse
 
 from src.schemas.evaluation import (
+    ClassPerformanceResponse,
     EvaluationInsightsResponse,
+    EvaluationSummaryResponse,
+    class_metrics_list_to_response,
+    class_metrics_to_response,
     evaluation_insights_to_response,
+    evaluation_summary_to_response,
 )
 
 from tools.evaluation.evaluation_service import (
+    get_class_metrics,
     get_evaluation_insights,
     get_primary_evaluation,
 )
@@ -82,9 +89,16 @@ def health()-> dict[str, str]:
 
 @app.post(
     "/predict",
+    response_model=PredictionResponse,
     tags=["Prediction"],
     summary="Predict a digit",
+    description=(
+        "Classifies an uploaded SVHN-style digit image using the "
+        "trained CNN model and returns the predicted digit, confidence, "
+        "and probability distribution across all digit classes."
+    ),
 )
+
 async def predict_digit(
     file: UploadFile = File(...)
 ) -> dict:
@@ -127,6 +141,80 @@ async def predict_digit(
         "independent model evaluation."
     ),
 )
+
+@app.get(
+    "/evaluation/summary",
+    response_model=EvaluationSummaryResponse,
+    tags=["Evaluation"],
+    summary="Get evaluation summary",
+    description=(
+        "Returns headline performance metrics from the primary "
+        "independent model evaluation."
+    ),
+)
+def evaluation_summary() -> EvaluationSummaryResponse:
+    evaluation = get_primary_evaluation()
+
+    return evaluation_summary_to_response(
+        evaluation
+    )
+
+@app.get(
+    "/evaluation/classes",
+    response_model=list[ClassPerformanceResponse],
+    tags=["Evaluation"],
+    summary="Get per-class evaluation metrics",
+    description=(
+        "Returns precision, recall, F1 score, and support "
+        "for each digit class in the primary independent evaluation."
+    ),
+)
+def evaluation_classes() -> list[ClassPerformanceResponse]:
+    evaluation = get_primary_evaluation()
+
+    return class_metrics_list_to_response(
+        evaluation.class_metrics
+    )
+
+@app.get(
+    "/evaluation/classes/{digit}",
+    response_model=ClassPerformanceResponse,
+    responses={
+        404: {
+            "description": "Digit class not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "No evaluation metrics found for digit 12."
+                    }
+                }
+            },
+        }
+    },
+    tags=["Evaluation"],
+    summary="Get metrics for a digit",
+    description=(
+        "Returns precision, recall, F1 score, and sample count "
+        "for a specific digit from the primary independent evaluation."
+    ),
+)
+def evaluation_class(
+    digit: int,
+) -> ClassPerformanceResponse:
+    evaluation = get_primary_evaluation()
+
+    metrics = get_class_metrics(
+        evaluation,
+        digit,
+    )
+
+    if metrics is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No evaluation metrics found for digit {digit}.",
+        )
+
+    return class_metrics_to_response(metrics)
 
 def evaluation_insights() -> EvaluationInsightsResponse:
     """

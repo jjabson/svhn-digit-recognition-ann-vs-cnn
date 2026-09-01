@@ -131,6 +131,19 @@ def get_evaluation_insights(
         most_common_misclassification_count=count,
     )
 
+def get_class_metrics(
+    evaluation: EvaluationInfo,
+    digit: int,
+) -> ClassMetrics | None:
+    return next(
+        (
+            metrics
+            for metrics in evaluation.class_metrics
+            if metrics.class_label == digit
+        ),
+        None,
+    )
+
 def main() -> None:
     evaluation = get_primary_evaluation()
     insights = get_evaluation_insights(evaluation)

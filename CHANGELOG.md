@@ -144,3 +144,28 @@
 - Kept API response formatting separate from internal evaluation domain models and persistence structures.
 
 ---
+
+## Phase 4.5 — API Readiness and Evaluation Intelligence
+
+### Added
+- Added an evaluation service layer separating application logic from SQLite persistence.
+- Added semantic evaluation helpers for strongest class, weakest class, and most common misclassification.
+- Added the `EvaluationInsights` domain container.
+- Added Pydantic response schemas to define stable public API contracts.
+- Added `GET /evaluation/insights` for model evaluation insights.
+- Added `GET /evaluation/summary` for headline metrics from the primary independent evaluation.
+- Added `GET /evaluation/classes` for per-class precision, recall, F1 score, and sample counts.
+- Added `GET /evaluation/classes/{digit}` for retrieving evaluation metrics for an individual digit class.
+- Added a Pydantic response contract for `POST /predict`.
+- Added Swagger/OpenAPI response examples for prediction and evaluation resources.
+- Added explicit OpenAPI documentation for expected `404` responses when a requested digit class does not exist.
+- Added FastAPI endpoint groups for System, Prediction, and Evaluation resources.
+
+### Changed
+- Improved FastAPI application metadata, endpoint summaries, descriptions, and Swagger organization.
+- Updated report-data generation to consume evaluation intelligence through the service layer.
+- Kept API response formatting separate from internal domain and persistence models.
+- Renamed public API `support` terminology to `sample_count` for clearer, non-specialist-facing responses.
+- Renamed public API `total_support` terminology to `total_sample_count` for consistency.
+- Updated prediction responses to use an explicit Pydantic API contract instead of an untyped dictionary response.
+- Documented application-level `404` behavior as part of the public OpenAPI contract.
