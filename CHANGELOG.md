@@ -169,3 +169,42 @@
 - Renamed public API `total_support` terminology to `total_sample_count` for consistency.
 - Updated prediction responses to use an explicit Pydantic API contract instead of an untyped dictionary response.
 - Documented application-level `404` behavior as part of the public OpenAPI contract.
+
+## Phase 4.5 — API Readiness and Evaluation Intelligence
+
+### Added
+- Added an evaluation service layer separating application logic from SQLite persistence.
+- Added semantic evaluation helpers for strongest class, weakest class, and most common misclassification.
+- Added the `EvaluationInsights` domain container.
+- Added Pydantic response schemas to define stable public API contracts.
+- Added `GET /evaluation/insights` for high-level model evaluation intelligence.
+- Added `GET /evaluation/summary` for headline metrics from the primary independent evaluation.
+- Added `GET /evaluation/classes` for per-class precision, recall, F1 score, and sample counts.
+- Added `GET /evaluation/classes/{digit}` for retrieving evaluation metrics for an individual digit class.
+- Added `GET /evaluation/confusion-matrix` for exposing the persisted confusion matrix as structured JSON.
+- Added `GET /model/summary` for trained CNN architecture and capacity information.
+- Added a model service layer between model inspection logic and the API.
+- Added semantic layer properties for dense-layer units and dropout rate.
+- Added a Pydantic response contract for `POST /predict`.
+- Added Pydantic response contracts for evaluation and model-summary resources.
+- Added Swagger/OpenAPI response examples for prediction, evaluation, and model resources.
+- Added explicit OpenAPI documentation for expected `404` responses when a requested digit class does not exist.
+- Added FastAPI endpoint groups for System, Prediction, Evaluation, and Model resources.
+
+### Changed
+- Improved FastAPI application metadata, endpoint summaries, descriptions, and Swagger organization.
+- Updated report-data generation to consume evaluation intelligence through the service layer.
+- Kept API response formatting separate from internal domain and persistence models.
+- Renamed public API `support` terminology to `sample_count` for clearer non-specialist-facing responses.
+- Renamed public API `total_support` terminology to `total_sample_count` for consistency.
+- Updated prediction responses to use an explicit Pydantic API contract instead of an untyped dictionary response.
+- Converted NumPy confusion-matrix data into a JSON-safe labels-and-matrix API representation.
+- Reused the already-loaded inference model for model-summary inspection instead of loading the Keras model again per request.
+- Exposed numeric model facts such as parameter counts as numeric API values while leaving display formatting to presentation layers.
+- Documented application-level `404` behavior as part of the public OpenAPI contract.
+- Expanded Swagger documentation with an explicit Model resource category.
+- Bumped the API version from `1.1.0` to `1.2.0`.
+
+### Fixed
+- Fixed `/evaluation/insights` route registration so the insights endpoint is associated with its correct handler and response contract.
+- Corrected inconsistent public API terminology between class-level and evaluation-summary sample counts.

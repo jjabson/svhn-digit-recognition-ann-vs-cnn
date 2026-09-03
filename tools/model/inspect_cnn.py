@@ -12,6 +12,22 @@ class LayerInfo:
     parameters: int
     config: dict[str, object] = field(default_factory=dict)
 
+    @property
+    def units(self) -> int | None:
+        """
+        Return the number of units for layers that define them.
+        """
+        value = self.config.get("units")
+        return int(value) if value is not None else None
+
+    @property
+    def dropout_rate(self) -> float | None:
+        """
+        Return the dropout rate for Dropout layers.
+        """
+        value = self.config.get("rate")
+        return float(value) if value is not None else None
+
 @dataclass
 class GroupInfo:
     group_name: str

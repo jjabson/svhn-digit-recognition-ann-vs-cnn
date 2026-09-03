@@ -8,10 +8,12 @@ from src.schemas.prediction import PredictionResponse
 
 from src.schemas.evaluation import (
     ClassPerformanceResponse,
+    ConfusionMatrixResponse,
     EvaluationInsightsResponse,
     EvaluationSummaryResponse,
     class_metrics_list_to_response,
     class_metrics_to_response,
+    confusion_matrix_to_response,
     evaluation_insights_to_response,
     evaluation_summary_to_response,
 )
@@ -21,6 +23,13 @@ from tools.evaluation.evaluation_service import (
     get_evaluation_insights,
     get_primary_evaluation,
 )
+
+from src.schemas.model import (
+    ModelSummaryResponse,
+    model_architecture_to_response,
+)
+
+from tools.model.model_service import get_model_architecture
 
 predictor: SVHNPredictor | None = None
 
@@ -39,7 +48,7 @@ app = FastAPI(
         "Production-oriented API for SVHN digit classification, "
         "model evaluation insights, and ML engineering diagnostics."
     ),
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
     contact={
         "name": "SVHN ML Engineering Project",
@@ -142,6 +151,20 @@ async def predict_digit(
     ),
 )
 
+def evaluation_insights() -> EvaluationInsightsResponse:
+    """
+    Return high-level insights from the primary model evaluation.
+    """
+    evaluation = get_primary_evaluation()
+
+    insights = get_evaluation_insights(
+        evaluation
+    )
+
+    return evaluation_insights_to_response(
+        insights
+    )
+
 @app.get(
     "/evaluation/summary",
     response_model=EvaluationSummaryResponse,
@@ -165,8 +188,8 @@ def evaluation_summary() -> EvaluationSummaryResponse:
     tags=["Evaluation"],
     summary="Get per-class evaluation metrics",
     description=(
-        "Returns precision, recall, F1 score, and support "
-        "for each digit class in the primary independent evaluation."
+            "Returns precision, recall, F1 score, and sample count "
+            "for each digit class in the primary independent evaluation."
     ),
 )
 def evaluation_classes() -> list[ClassPerformanceResponse]:
@@ -216,16 +239,45 @@ def evaluation_class(
 
     return class_metrics_to_response(metrics)
 
-def evaluation_insights() -> EvaluationInsightsResponse:
-    """
-    Return high-level insights from the primary model evaluation.
-    """
+
+
+@app.get(
+    "/evaluation/confusion-matrix",
+    response_model=ConfusionMatrixResponse,
+    tags=["Evaluation"],
+    summary="Get confusion matrix",
+    description=(
+        "Returns the confusion matrix from the primary independent "
+        "model evaluation. Rows represent true digit classes and "
+        "columns represent predicted digit classes."
+    ),
+)
+def evaluation_confusion_matrix() -> ConfusionMatrixResponse:
     evaluation = get_primary_evaluation()
 
-    insights = get_evaluation_insights(
-        evaluation
+    return confusion_matrix_to_response(evaluation)
+
+@app.get(
+    "/model/summary",
+    response_model=ModelSummaryResponse,
+    tags=["Model"],
+    summary="Get model summary",
+    description=(
+        "Returns key architecture and capacity information "
+        "for the trained SVHN CNN model."
+    ),
+)
+def model_summary() -> ModelSummaryResponse:
+    if predictor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Prediction model is not available.",
+        )
+
+    architecture = get_model_architecture(
+        predictor.model
     )
 
-    return evaluation_insights_to_response(
-        insights
+    return model_architecture_to_response(
+        architecture
     )

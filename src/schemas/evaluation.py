@@ -146,7 +146,7 @@ class EvaluationSummaryResponse(BaseModel):
                 "macro_precision": 0.951644,
                 "macro_recall": 0.951375,
                 "macro_f1": 0.951395,
-                "total_support": 24000,
+                "total_sample_count": 24000,
                 "correct_predictions": 22833,
                 "incorrect_predictions": 1167,
             }
@@ -159,7 +159,7 @@ class EvaluationSummaryResponse(BaseModel):
     macro_precision: float
     macro_recall: float
     macro_f1: float
-    total_support: int
+    total_sample_count: int
     correct_predictions: int
     incorrect_predictions: int
 
@@ -173,7 +173,7 @@ def evaluation_summary_to_response(
         macro_precision=evaluation.macro_precision,
         macro_recall=evaluation.macro_recall,
         macro_f1=evaluation.macro_f1,
-        total_support=evaluation.total_support,
+        total_sample_count=evaluation.total_support,
         correct_predictions=evaluation.correct_predictions,
         incorrect_predictions=evaluation.incorrect_predictions,
     )
@@ -185,6 +185,27 @@ def class_metrics_list_to_response(
         class_metrics_to_response(metrics)
         for metrics in class_metrics
     ]
+
+class ConfusionMatrixResponse(BaseModel):
+    """
+    Public API representation of the model confusion matrix.
+    """
+
+    labels: list[int]
+    matrix: list[list[int]]
+
+def confusion_matrix_to_response(
+    evaluation: EvaluationInfo,
+) -> ConfusionMatrixResponse:
+    labels = [
+        metrics.class_label
+        for metrics in evaluation.class_metrics
+    ]
+
+    return ConfusionMatrixResponse(
+        labels=labels,
+        matrix=evaluation.confusion_matrix.tolist(),
+    )
 
 def main() -> None:
     evaluation = get_primary_evaluation()
