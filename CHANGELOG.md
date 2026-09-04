@@ -208,3 +208,89 @@
 ### Fixed
 - Fixed `/evaluation/insights` route registration so the insights endpoint is associated with its correct handler and response contract.
 - Corrected inconsistent public API terminology between class-level and evaluation-summary sample counts.
+
+## Phase 5.1A — Inference Orchestration Foundation
+
+### Added
+
+- Added a typed inference orchestration domain model with:
+  - `InferenceAttempt` for normalized results from individual model executions.
+  - `InferenceDecision` for final orchestration outcomes.
+  - `InferencePolicy` for configurable decision thresholds.
+  - `DecisionStatus` for `ACCEPTED`, `UNCERTAIN`, and `FAILED` outcomes.
+- Added deterministic confidence-based decision policies for:
+  - Accepting high-confidence primary predictions.
+  - Marking low-confidence predictions as uncertain.
+  - Handling primary-model failures.
+  - Invoking fallback inference when the primary result is unacceptable.
+  - Handling low-confidence and failed fallback predictions.
+  - Flagging uncertain and failed decisions for review.
+- Added a generic model execution boundary that:
+  - Converts successful model predictions into `InferenceAttempt` objects.
+  - Converts model execution exceptions into controlled failed attempts.
+  - Keeps model-specific implementation details outside the orchestration core.
+- Added lazy fallback execution so fallback models are invoked only when the
+  primary prediction does not satisfy the configured policy.
+- Added an SVHN predictor adapter that bridges the existing
+  `SVHNPredictor` interface to the generic orchestration execution contract
+  without introducing TensorFlow-specific dependencies into the orchestration
+  core.
+- Added real-model integration coverage using the saved SVHN CNN and generated
+  sample images.
+- Added automated tests covering execution, adapters, orchestration policies,
+  fallback behavior, failure handling, and real CNN integration.
+
+### Changed
+
+- Separated raw model execution results from orchestration decisions:
+  - `InferenceAttempt` now represents what an individual model actually did.
+  - `InferenceDecision` represents what the orchestration layer decides to do
+    with model results.
+- Separated `decision_reason` from `fallback_reason` so final decision semantics
+  are distinct from the reason a fallback model was invoked.
+- Made `selected_model` optional for failed decisions where no model produced a
+  usable final prediction.
+- Established a layered inference architecture separating:
+  - Model-specific inference.
+  - Model adapters.
+  - Generic execution.
+  - Decision policy.
+  - Orchestration flow.
+- Preserved the existing `SVHNPredictor` as the owner of image preprocessing
+  and TensorFlow inference while adapting its output for generic orchestration.
+
+### Reliability and Validation
+
+- Verified high-confidence primary predictions are accepted without executing
+  the fallback model.
+- Verified low-confidence primary predictions can trigger fallback inference.
+- Verified primary-model and fallback-model failures produce controlled
+  orchestration outcomes rather than uncaught inference failures.
+- Verified low-confidence usable predictions remain available while being
+  classified as `UNCERTAIN` and flagged for review.
+- Verified the fallback callable is not executed when the primary prediction
+  already satisfies the policy.
+- Successfully exercised the complete real inference path:
+
+  `image bytes → preprocessing → TensorFlow CNN → adapter → execution → policy → orchestration → InferenceDecision`
+
+- Evaluated one generated sample for each SVHN digit through the real
+  orchestration pipeline:
+  - All 10 sample digits were predicted correctly.
+  - 9 predictions satisfied the provisional 0.90 confidence threshold.
+  - Digit 8 was correctly predicted at approximately 81.87% confidence and was
+    appropriately classified as `UNCERTAIN` with review required.
+- Confirmed the complete repository test suite passes with **15 tests passing**.
+
+### Notes
+
+- The current `0.90` confidence threshold is a provisional orchestration
+  configuration used to exercise policy behavior; it has not yet been
+  calibrated as a production operating threshold.
+- Confidence-threshold calibration, coverage-versus-risk analysis, failure
+  injection, and fallback-effectiveness measurement are planned for the
+  reliability evaluation phase.
+- The orchestration core remains framework-independent so future model
+  implementations and MCP/tool interfaces can consume the same tested decision
+  system without coupling orchestration logic to TensorFlow or an agent
+  framework.
