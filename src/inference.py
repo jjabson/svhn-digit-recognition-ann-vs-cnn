@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from src.preprocessing import preprocess_image_bytes
+from src.schemas.prediction import PredictionResult
 
 
 DEFAULT_MODEL_PATH = (
@@ -27,7 +28,7 @@ class SVHNPredictor:
 
         self.model = tf.keras.models.load_model(model_path)
 
-    def predict(self, image_bytes: bytes) -> dict:
+    def predict(self, image_bytes: bytes) -> PredictionResult:
         image_tensor = preprocess_image_bytes(image_bytes)
 
         probabilities = self.model.predict(
@@ -38,12 +39,11 @@ class SVHNPredictor:
         predicted_digit = int(np.argmax(probabilities))
         confidence = float(probabilities[predicted_digit])
 
-        return {
-            "predicted_digit": predicted_digit,
-            "confidence": confidence,
-            "confidence_percent": f"{confidence * 100:.2f}%",
-            "probabilities": {
+        return PredictionResult(
+            predicted_digit=predicted_digit,
+            confidence=confidence,
+            probabilities={
                 str(digit): float(probability)
                 for digit, probability in enumerate(probabilities)
-            }
-        }
+            },
+        )

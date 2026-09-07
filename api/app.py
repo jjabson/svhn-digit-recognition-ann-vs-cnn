@@ -1,10 +1,22 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from src.orchestration.errors import InvalidInferenceInputError
 
-from src.inference import SVHNPredictor
+from src.orchestration.inference_service import (
+    OrchestratedInferenceService,
+)
+from src.orchestration.service_factory import (
+    create_orchestrated_inference_service,
+)
 from src.preprocessing import InvalidImageError
-from src.schemas.prediction import PredictionResponse
+
+from src.schemas.prediction import (
+    OrchestratedPredictionResponse,
+    PredictionResponse,
+    inference_decision_to_response,
+    InferenceConfigResponse,
+)
 
 from src.schemas.evaluation import (
     ClassPerformanceResponse,
@@ -31,15 +43,18 @@ from src.schemas.model import (
 
 from tools.model.model_service import get_model_architecture
 
-predictor: SVHNPredictor | None = None
+inference_service: OrchestratedInferenceService | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global predictor
-    predictor = SVHNPredictor()
+    global inference_service
+
+    inference_service = create_orchestrated_inference_service()
+
     yield
-    predictor = None
+
+    inference_service = None
 
 
 app = FastAPI(
@@ -48,7 +63,7 @@ app = FastAPI(
         "Production-oriented API for SVHN digit classification, "
         "model evaluation insights, and ML engineering diagnostics."
     ),
-    version="1.2.0",
+    version="1.3.0",
     lifespan=lifespan,
     contact={
         "name": "SVHN ML Engineering Project",
@@ -122,7 +137,7 @@ async def predict_digit(
             detail="Only PNG and JPEG images are supported."
         )
 
-    if predictor is None:
+    if inference_service is None:
         raise HTTPException(
             status_code=503,
             detail="The prediction model is unavailable."
@@ -130,8 +145,16 @@ async def predict_digit(
 
     try:
         image_bytes = await file.read()
-        result = predictor.predict(image_bytes)
-        return result
+        # Preserve the existing PredictionResponse contract until
+        # the orchestration-aware API response is introduced.
+        result = inference_service.predictor.predict(image_bytes)
+
+        return {
+            "predicted_digit": result.predicted_digit,
+            "confidence": result.confidence,
+            "confidence_percent": result.confidence_percent,
+            "probabilities": result.probabilities,
+        }
 
     except InvalidImageError as exc:
         raise HTTPException(
@@ -139,6 +162,53 @@ async def predict_digit(
             detail=str(exc)
         ) from exc
 
+@app.post(
+    "/predict/orchestrated",
+    response_model=OrchestratedPredictionResponse,
+    tags=["Prediction"],
+    summary="Predict a digit with orchestration",
+    description=(
+        "Classifies an uploaded SVHN-style digit image using the "
+        "inference orchestration layer and returns both the prediction "
+        "and the orchestration decision."
+    ),
+)
+async def predict_digit_orchestrated(
+    file: UploadFile = File(...),
+) -> OrchestratedPredictionResponse:
+    allowed_content_types = {
+        "image/png",
+        "image/jpeg",
+    }
+
+    if file.content_type not in allowed_content_types:
+        raise HTTPException(
+            status_code=415,
+            detail="Only PNG and JPEG images are supported.",
+        )
+
+    if inference_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="The inference service is unavailable.",
+        )
+
+    image_bytes = await file.read()
+
+    try:
+        decision = inference_service.predict(
+            image_bytes,
+        )
+
+    except InvalidInferenceInputError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return inference_decision_to_response(
+        decision,
+    )
 
 @app.get(
     "/evaluation/insights",
@@ -268,16 +338,34 @@ def evaluation_confusion_matrix() -> ConfusionMatrixResponse:
     ),
 )
 def model_summary() -> ModelSummaryResponse:
-    if predictor is None:
+    if inference_service is None:
         raise HTTPException(
             status_code=503,
             detail="Prediction model is not available.",
         )
 
     architecture = get_model_architecture(
-        predictor.model
+        inference_service.predictor.model
     )
 
     return model_architecture_to_response(
         architecture
+    )
+
+@app.get(
+    "/inference/config",
+    response_model=InferenceConfigResponse,
+)
+def get_inference_config() -> InferenceConfigResponse:
+    if inference_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Inference service is not available.",
+        )
+
+    return InferenceConfigResponse(
+        model_name=inference_service.model_name,
+        confidence_threshold=(
+            inference_service.policy.confidence_threshold
+        ),
     )

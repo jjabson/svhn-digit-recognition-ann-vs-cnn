@@ -1,3 +1,6 @@
+import pytest
+
+from src.orchestration.policy import create_primary_decision
 from src.orchestration.service import orchestrate_inference
 
 from src.orchestration.service import run_orchestrated_inference
@@ -234,3 +237,67 @@ def test_does_not_execute_fallback_when_primary_is_accepted():
     assert decision.fallback_reason is None
 
     assert fallback_call_count == 0
+
+def test_inference_policy_rejects_threshold_below_zero():
+    with pytest.raises(
+        ValueError,
+        match="confidence_threshold must be between",
+    ):
+        InferencePolicy(
+            confidence_threshold=-0.01,
+        )
+
+
+def test_inference_policy_rejects_threshold_above_one():
+    with pytest.raises(
+        ValueError,
+        match="confidence_threshold must be between",
+    ):
+        InferencePolicy(
+            confidence_threshold=1.01,
+        )
+
+def test_accepts_prediction_exactly_at_confidence_threshold():
+    policy = InferencePolicy(
+        confidence_threshold=0.90,
+    )
+
+    attempt = InferenceAttempt(
+        model_name="cnn",
+        predicted_digit=7,
+        confidence=0.90,
+        succeeded=True,
+        error_message=None,
+    )
+
+    decision = create_primary_decision(
+        attempt=attempt,
+        policy=policy,
+    )
+
+    assert decision.status == DecisionStatus.ACCEPTED
+    assert decision.predicted_digit == 7
+    assert decision.review_required is False
+
+
+def test_marks_prediction_below_confidence_threshold_uncertain():
+    policy = InferencePolicy(
+        confidence_threshold=0.90,
+    )
+
+    attempt = InferenceAttempt(
+        model_name="cnn",
+        predicted_digit=7,
+        confidence=0.8999,
+        succeeded=True,
+        error_message=None,
+    )
+
+    decision = create_primary_decision(
+        attempt=attempt,
+        policy=policy,
+    )
+
+    assert decision.status == DecisionStatus.UNCERTAIN
+    assert decision.predicted_digit == 7
+    assert decision.review_required is True

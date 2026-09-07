@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from src.schemas.orchestration import InferenceAttempt
+from src.orchestration.errors import InvalidInferenceInputError
 
 
 def execute_model_attempt(
@@ -8,13 +9,12 @@ def execute_model_attempt(
     predict_fn: Callable[[], tuple[int, float]],
 ) -> InferenceAttempt:
     """
-    Execute one model prediction and convert the result into
-    a normalized InferenceAttempt.
+        Execute one model prediction and convert the result into
+        a normalized InferenceAttempt.
 
-    The prediction function must return:
-        (predicted_digit, confidence)
-    """
-
+        The prediction function must return:
+            (predicted_digit, confidence)
+        """
     try:
         predicted_digit, confidence = predict_fn()
 
@@ -25,6 +25,9 @@ def execute_model_attempt(
             succeeded=True,
             error_message=None,
         )
+
+    except InvalidInferenceInputError:
+        raise
 
     except Exception as exc:
         return InferenceAttempt(

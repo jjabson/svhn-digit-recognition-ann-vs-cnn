@@ -1,15 +1,18 @@
+import pytest
+from src.orchestration.errors import InvalidInferenceInputError
+from src.preprocessing import InvalidImageError
 from src.orchestration.adapters import create_svhn_predict_fn
 from src.orchestration.execution import execute_model_attempt
+from src.schemas.prediction import PredictionResult
 
 
 class FakeSVHNPredictor:
-    def predict(self, image_bytes: bytes) -> dict:
-        return {
-            "predicted_digit": 7,
-            "confidence": 0.982,
-            "confidence_percent": "98.20%",
-            "probabilities": {},
-        }
+    def predict(self, image_bytes: bytes) -> PredictionResult:
+        return PredictionResult(
+            predicted_digit=7,
+            confidence=0.982,
+            probabilities={},
+        )
 
 
 def test_svhn_adapter_returns_generic_prediction_tuple():
@@ -44,3 +47,24 @@ def test_svhn_adapter_integrates_with_execution_layer():
     assert attempt.confidence == 0.982
     assert attempt.succeeded is True
     assert attempt.error_message is None
+
+class InvalidImagePredictor:
+    def predict(self, image_bytes: bytes):
+        raise InvalidImageError(
+            "The uploaded file is not a valid image."
+        )
+
+
+def test_svhn_adapter_translates_invalid_image_error():
+    predictor = InvalidImagePredictor()
+
+    predict_fn = create_svhn_predict_fn(
+        predictor=predictor,
+        image_bytes=b"invalid-image-data",
+    )
+
+    with pytest.raises(
+        InvalidInferenceInputError,
+        match="The uploaded file is not a valid image.",
+    ):
+        predict_fn()

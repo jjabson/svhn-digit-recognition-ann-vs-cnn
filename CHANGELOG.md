@@ -294,3 +294,18 @@
   implementations and MCP/tool interfaces can consume the same tested decision
   system without coupling orchestration logic to TensorFlow or an agent
   framework.
+
+## Phase 5.1B — Production Inference Orchestration Service
+
+- Added typed inference runtime configuration with validation.
+- Added injectable orchestration service factory.
+- Added typed `PredictionResult` integration through serving layers.
+- Added `/predict/orchestrated` endpoint with structured decision responses.
+- Added `/inference/config` runtime serving metadata endpoint.
+- Added explicit invalid-input boundary handling:
+  - unsupported media type → HTTP 415
+  - malformed image input → HTTP 400
+  - model/runtime failure → structured FAILED inference decision
+  - unavailable inference service → HTTP 503
+- Added threshold-boundary policy validation and tests.
+- Expanded automated test coverage to 39 passing tests.

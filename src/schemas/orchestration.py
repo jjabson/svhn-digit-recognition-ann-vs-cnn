@@ -49,8 +49,13 @@ class InferenceDecision:
 @dataclass(frozen=True)
 class InferencePolicy:
     """
-    Defines the decision thresholds used by the
-    inference orchestration layer.
-    """
-
+        Defines the decision thresholds used by the
+        inference orchestration layer.
+        """
     confidence_threshold: float
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence_threshold <= 1.0:
+            raise ValueError(
+                "confidence_threshold must be between 0.0 and 1.0."
+            )

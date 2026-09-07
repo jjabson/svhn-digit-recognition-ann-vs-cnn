@@ -1,6 +1,8 @@
 from collections.abc import Callable
 
 from src.inference import SVHNPredictor
+from src.orchestration.errors import InvalidInferenceInputError
+from src.preprocessing import InvalidImageError
 
 
 def create_svhn_predict_fn(
@@ -13,11 +15,17 @@ def create_svhn_predict_fn(
     """
 
     def predict() -> tuple[int, float]:
-        result = predictor.predict(image_bytes)
+        try:
+            result = predictor.predict(image_bytes)
+
+        except InvalidImageError as exc:
+            raise InvalidInferenceInputError(
+                str(exc)
+            ) from exc
 
         return (
-            int(result["predicted_digit"]),
-            float(result["confidence"]),
+            result.predicted_digit,
+            result.confidence,
         )
 
     return predict

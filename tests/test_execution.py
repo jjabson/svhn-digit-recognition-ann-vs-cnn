@@ -1,3 +1,6 @@
+import pytest
+
+from src.orchestration.errors import InvalidInferenceInputError
 from src.orchestration.execution import execute_model_attempt
 
 
@@ -31,3 +34,18 @@ def test_execute_model_attempt_converts_exception_to_failed_attempt():
     assert attempt.confidence is None
     assert attempt.succeeded is False
     assert attempt.error_message == "Model unavailable"
+
+def test_execute_model_attempt_does_not_convert_invalid_input_to_model_failure():
+    def predict():
+        raise InvalidInferenceInputError(
+            "The uploaded file is not a valid image."
+        )
+
+    with pytest.raises(
+        InvalidInferenceInputError,
+        match="The uploaded file is not a valid image.",
+    ):
+        execute_model_attempt(
+            model_name="cnn",
+            predict_fn=predict,
+        )
