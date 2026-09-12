@@ -23,12 +23,15 @@ observed, and integrated into a maintainable software architecture.
 - Policy-driven inference orchestration with `ACCEPTED`, `UNCERTAIN`,
   and `FAILED` outcomes.
 - Typed Python domain models using dataclasses and Pydantic API contracts.
-- SQLite-backed persisted evaluation results.
+- SQLite-backed persisted evaluation and per-prediction reliability observations.
+- Confidence, threshold, selective-risk, and calibration analysis.
+- Deterministic failure and fallback reliability evaluation.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **39 automated tests** covering preprocessing, inference, orchestration,
-  configuration, API behavior, and real-model integration.
+- **84 automated tests** covering preprocessing, inference, orchestration,
+  reliability analysis, persistence, configuration, API behavior, and
+  real-model integration.
 
 ---
 
@@ -144,12 +147,14 @@ The orchestration policy currently supports three final states:
   threshold and requires review.
 - `FAILED` — model execution did not produce a usable prediction.
 
-The current confidence threshold is **0.90**. It is deliberately treated
-as a provisional orchestration setting rather than a calibrated production
-threshold.
+The current confidence threshold is **0.90**. Reliability analysis on the
+authoritative 24,000-sample Historical Stratified Holdout shows that this
+operating point provides **91.38% coverage**, **98.44% accepted accuracy**,
+**1.56% selective risk**, and an **8.62% uncertainty rate**.
 
-Threshold calibration and coverage-versus-risk analysis are planned as
-part of the reliability evaluation phase.
+The 0.90 threshold remains an evaluated operating point rather than a claimed
+globally optimal production threshold. Final threshold selection depends on
+the reliability, risk, and review-cost requirements of the serving environment.
 
 ---
 
@@ -291,6 +296,110 @@ repeated every time the report is generated.
 
 ---
 
+## Reliability Evaluation
+
+Reliability evaluation extends model accuracy into confidence behavior,
+selective prediction, calibration, persistence, and controlled orchestration
+failure analysis.
+
+### Confidence & Threshold Analysis
+
+The authoritative 24,000-sample Historical Stratified Holdout produced:
+
+| Metric | Result |
+|---|---:|
+| Accuracy | **95.14%** |
+| Mean confidence | **96.75%** |
+| Mean confidence — correct predictions | **98.10%** |
+| Mean confidence — incorrect predictions | **70.45%** |
+
+High confidence does not guarantee correctness. The evaluation identified
+**148 incorrect predictions with confidence >= 0.99**.
+
+At the current **0.90** orchestration threshold:
+
+| Metric | Result |
+|---|---:|
+| Coverage | **91.38%** |
+| Accepted accuracy | **98.44%** |
+| Selective risk | **1.56%** |
+| Uncertainty rate | **8.62%** |
+| Incorrect accepted predictions | **342** |
+
+Increasing the threshold generally increases accepted-prediction accuracy and
+reduces selective risk at the cost of lower coverage and a higher review rate.
+
+### Calibration
+
+Confidence calibration was measured using 10 equal-width bins:
+
+| Metric | Result |
+|---|---:|
+| Expected Calibration Error (ECE) | **1.65%** |
+| Maximum Calibration Error (MCE) | **31.91%** |
+
+The low aggregate ECE indicates relatively good overall calibration. The raw
+MCE is driven by a sparsely populated 0.10–0.20 confidence bin containing only
+four predictions.
+
+A more substantially populated 0.70–0.80 confidence region contained 417
+predictions and showed a **9.14 percentage-point overconfidence gap**.
+
+### Reliability Persistence
+
+Per-prediction reliability observations are persisted in SQLite and associated
+with the evaluation protocol that produced them.
+
+The persistence layer stores source facts:
+
+- observation index
+- true label
+- predicted label
+- confidence
+
+Derived properties such as correctness, threshold acceptance, uncertainty,
+selective risk, and calibration membership are computed from those observations
+rather than redundantly stored.
+
+All **24,000 Historical Stratified Holdout observations** are persisted for
+repeatable downstream reliability analysis.
+
+### Failure & Fallback Reliability
+
+The orchestration layer is evaluated with deterministic failure injection
+against the real orchestration service.
+
+The controlled scenario suite covers:
+
+1. primary prediction accepted without fallback
+2. primary model failure recovered by fallback
+3. primary and fallback model failure
+4. low-confidence primary prediction recovered by fallback
+5. low-confidence primary and fallback predictions requiring review
+
+It verifies both fallback triggers — `primary_model_failed` and
+`primary_low_confidence` — as well as explicit `FAILED` and `UNCERTAIN`
+outcomes requiring review.
+
+Controlled scenario-suite results:
+
+| Metric | Result |
+|---|---:|
+| Scenarios | **5** |
+| Failure rate | **20.00%** |
+| Fallback usage rate | **80.00%** |
+| Review-required rate | **40.00%** |
+
+These percentages describe an intentionally constructed reliability scenario
+suite. They are **not production incident-rate estimates**.
+
+Run the controlled analysis with:
+
+```bash
+python -m tools.reliability.run_failure_analysis
+
+---
+
 ## Automated Testing
 
 Run the complete suite with:
@@ -302,7 +411,7 @@ python -m pytest -v
 Current milestone:
 
 ```text
-39 passed
+84 passed, 1 warning
 ```
 
 Coverage includes:
@@ -321,6 +430,15 @@ Coverage includes:
 - HTTP failure semantics
 - serving metadata
 - real saved-CNN integration
+- confidence-versus-correctness analysis
+- confidence-threshold and selective-risk evaluation
+- calibration analysis
+- SQLite reliability-observation persistence
+- deterministic failure injection
+- fallback recovery and review escalation
+
+The remaining warning is a known FastAPI/Starlette `TestClient` dependency
+deprecation warning and does not affect current test correctness.
 
 A real-model integration test exercises the path:
 
@@ -382,6 +500,7 @@ The container launches the FastAPI application through Uvicorn on port
 │
 ├── tools/
 │   ├── evaluation/            # Evaluation persistence & services
+│   ├── reliability/           # Confidence, calibration & failure analysis
 │   ├── figures/               # Automated figure generation
 │   └── model/                 # Model inspection
 │
@@ -418,6 +537,12 @@ Several design rules guide the evolution of the project:
 - API contracts remain separate from internal domain and persistence models.
 - Orchestration remains deterministic, typed, testable, and independent of
   agent frameworks.
+- Reliability observations store source facts; derived reliability meaning is
+  computed from them.
+- Model inference produces reliability observations once; downstream analyses
+  can consume them many times.
+- Reliability evaluation observes the orchestration contract rather than
+  changing that contract for test convenience.
 
 ---
 
@@ -467,24 +592,29 @@ Several design rules guide the evolution of the project:
 - inference orchestration foundation
 - production-facing orchestration service
 - typed runtime configuration and serving metadata
+- confidence-versus-correctness analysis
+- confidence-threshold and selective-risk evaluation
+- calibration analysis
+- reliability-observation persistence
+- deterministic failure and fallback reliability evaluation
 
-### Next — Reliability Evaluation
+### Next — MCP Interoperability
+
+The next phase will expose selected inference and evaluation capabilities
+through an MCP interface while keeping orchestration and reliability logic
+independent of agent frameworks.
 
 Planned work includes:
 
-- confidence-threshold analysis
-- confidence vs. correctness measurement
-- coverage-versus-risk analysis
-- uncertainty behavior
-- failure injection
-- fallback-effectiveness evaluation
+- MCP interface for tool interoperability
+- typed MCP-facing operations
+- MCP integration testing
+- test agent consuming the MCP interface
 
 ### Future
 
-After the orchestration system has been reliability-tested:
+After MCP interoperability:
 
-- MCP interface for agent/tool interoperability
-- MCP test agent
 - demonstration agent
 - inference decision/audit records
 - latency and fallback metrics

@@ -363,3 +363,26 @@
 - Added 8 dedicated reliability-persistence tests.
 - Full regression suite: 74 tests passed.
 - One known FastAPI/Starlette deprecation warning remains related to `starlette.testclient` and `httpx`; this does not affect current test correctness.
+
+#### Failure & Fallback Reliability
+- Added deterministic failure-injection evaluation over the real inference orchestration service.
+- Added `FailureScenarioResult` for normalized reliability observations derived from `InferenceDecision`.
+- Added `FailureReliabilitySummary` with:
+  - failure rate
+  - fallback usage rate
+  - review-required rate
+- Evaluated five controlled orchestration scenarios:
+  - primary prediction accepted without fallback
+  - primary model failure recovered by fallback
+  - primary and fallback model failure
+  - low-confidence primary prediction recovered by fallback
+  - low-confidence primary and fallback predictions requiring review
+- Verified fallback-cause tracking for both `primary_model_failed` and `primary_low_confidence`.
+- Verified unrecoverable fallback failure produces a `FAILED` decision requiring review.
+- Verified unresolved low-confidence fallback produces an `UNCERTAIN` decision requiring review.
+- Added a CLI reliability runner for deterministic failure/fallback analysis.
+- Controlled five-scenario suite results:
+  - Failure rate: 20.00%
+  - Fallback usage rate: 80.00%
+  - Review-required rate: 40.00%
+- These rates characterize the intentionally constructed reliability scenario suite and are not production incident-rate estimates.
