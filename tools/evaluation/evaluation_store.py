@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import numpy as np
+from pathlib import Path
 
 from config.project_paths import DATABASE_FILE
 from tools.evaluation.evaluate_model import (
@@ -14,16 +15,18 @@ from tools.evaluation.evaluate_model import (
     compare_evaluation_protocols,
 )
 
-def initialize_database() -> None:
+def initialize_database(
+    database_file: Path = DATABASE_FILE,
+) -> None:
     """
     Create the evaluation persistence database and required tables.
     """
-    DATABASE_FILE.parent.mkdir(
+    database_file.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    with sqlite3.connect(DATABASE_FILE) as connection:
+    with sqlite3.connect(database_file) as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS evaluation_run (

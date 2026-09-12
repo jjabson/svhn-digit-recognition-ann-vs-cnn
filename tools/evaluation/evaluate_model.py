@@ -220,36 +220,6 @@ def load_historical_evaluation_data() -> tuple[
 
     return X_eval, y_eval, protocol
 
-def evaluate_trained_model(
-    data_loader: EvaluationDataLoader,
-) -> EvaluationInfo:
-    """
-    Evaluate the trained SVHN CNN using the supplied evaluation protocol.
-    """
-    model = load_trained_model()
-
-    X_eval, y_eval, protocol = data_loader()
-
-    X_eval_processed = preprocess_image_batch(
-        X_eval
-    )
-
-    y_pred_probs = model.predict(
-        X_eval_processed,
-        verbose=0,
-    )
-
-    y_pred = np.argmax(
-        y_pred_probs,
-        axis=1,
-    )
-
-    return evaluate_predictions(
-        y_true=y_eval,
-        y_pred=y_pred,
-        protocol=protocol,
-    )
-
 def evaluate_predictions(
     y_true: np.ndarray,
     y_pred: np.ndarray,

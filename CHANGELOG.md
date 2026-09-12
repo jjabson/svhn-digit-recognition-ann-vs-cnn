@@ -309,3 +309,57 @@
   - unavailable inference service → HTTP 503
 - Added threshold-boundary policy validation and tests.
 - Expanded automated test coverage to 39 passing tests.
+
+### Phase 5.2 — Reliability Evaluation
+
+#### Confidence Analysis
+- Added `ConfidenceObservation` domain model for per-prediction reliability data.
+- Added confidence summaries for overall, correct, and incorrect predictions.
+- Evaluated confidence behavior on the authoritative 24,000-sample Historical Stratified Holdout.
+- Confirmed 95.14% overall accuracy with:
+  - 96.75% mean confidence overall.
+  - 98.10% mean confidence for correct predictions.
+  - 70.45% mean confidence for incorrect predictions.
+- Added high-confidence error analysis and misclassification-pair aggregation.
+- Identified 148 incorrect predictions with confidence >= 0.99.
+
+#### Threshold Evaluation
+- Added confidence-threshold evaluation with coverage, accepted accuracy, selective risk, and uncertainty rate.
+- Added multi-threshold reliability sweeps.
+- At the current 0.90 serving threshold:
+  - Coverage: 91.38%.
+  - Accepted accuracy: 98.44%.
+  - Selective risk: 1.56%.
+  - Uncertainty rate: 8.62%.
+  - Incorrect accepted predictions: 342.
+- Confirmed the expected reliability/coverage tradeoff as confidence thresholds increase.
+- Deferred final production-threshold selection until an explicit reliability or business constraint is defined.
+
+#### Calibration Analysis
+- Added confidence calibration bins with observed accuracy and calibration-gap measurements.
+- Added Expected Calibration Error (ECE) and Maximum Calibration Error (MCE).
+- Measured 10-bin ECE of 1.65% on the 24,000-sample Historical Stratified Holdout.
+- Measured raw MCE of 31.91%, originating from the sparsely populated 0.10–0.20 confidence bin containing only 4 predictions.
+- Identified meaningful intermediate-confidence overconfidence, including a 9.14 percentage-point calibration gap in the 0.70–0.80 bin across 417 predictions.
+
+#### Reliability Persistence
+- Added SQLite persistence for per-prediction reliability observations.
+- Associated reliability observations with their parent `evaluation_run`.
+- Persisted authoritative prediction facts:
+  - observation index
+  - true label
+  - predicted label
+  - confidence
+- Kept correctness, threshold decisions, and calibration results derived rather than redundantly persisted.
+- Added replacement semantics so rerunning an evaluation replaces existing observations instead of accumulating duplicates.
+- Added loading support to reconstruct `ConfidenceObservation` domain objects from persisted data.
+- Added isolated temporary-database testing for reliability persistence.
+- Enabled SQLite foreign-key enforcement for reliability-store connections.
+- Persisted and independently verified all 24,000 Historical Stratified Holdout reliability observations.
+- Added reliability persistence tests covering initialization, save, replacement, load, unknown protocols, referential integrity, and round-trip behavior.
+
+##### Testing
+- Expanded reliability-analysis coverage with confidence, threshold, high-confidence-error, calibration, ECE, and MCE tests.
+- Added 8 dedicated reliability-persistence tests.
+- Full regression suite: 74 tests passed.
+- One known FastAPI/Starlette deprecation warning remains related to `starlette.testclient` and `httpx`; this does not affect current test correctness.
