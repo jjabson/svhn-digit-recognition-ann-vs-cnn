@@ -23,3 +23,9 @@ data/*.hdf5
 
 # Logs
 *.log
+
+# Python package metadata
+*.egg-info/
+
+# uv dependency lock file
+uv.lock

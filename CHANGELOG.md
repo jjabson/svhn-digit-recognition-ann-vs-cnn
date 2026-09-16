@@ -386,3 +386,43 @@
   - Fallback usage rate: 80.00%
   - Review-required rate: 40.00%
 - These rates characterize the intentionally constructed reliability scenario suite and are not production incident-rate estimates.
+
+## Phase 5.3B – MCP Server Implementation
+
+### Added
+- Added an MCP server using the MCP Python SDK.
+- Added typed MCP result contracts for inference configuration, evaluation
+  summaries, evaluation insights, per-digit metrics, model summaries, and
+  orchestrated prediction decisions.
+- Added six MCP tools:
+  - `get_inference_config`
+  - `get_evaluation_summary`
+  - `get_evaluation_insights`
+  - `get_digit_metrics`
+  - `get_model_summary`
+  - `predict_digit`
+- Added Base64 image input support for MCP inference requests.
+- Added MCP tool-error handling for malformed Base64, empty image payloads,
+  invalid image data, and unavailable per-digit evaluation metrics.
+- Added project packaging configuration for editable installation and MCP
+  module execution.
+
+### Changed
+- Added service-level access to the architecture of the model currently used
+  for inference.
+- MCP model inspection now reports the active serving model rather than
+  independently loading a model for inspection.
+- MCP prediction delegates to the existing production inference orchestration
+  service rather than duplicating model execution or decision policy.
+- Strengthened MCP model-shape contracts to represent dimensions as integers
+  or null values.
+
+### Validation
+- Verified discovery of all six MCP tools using a real MCP SDK client.
+- Verified machine-readable input and output schemas for all MCP tools.
+- Successfully classified `digit_3_true3.png` through MCP as digit 3 with an
+  accepted orchestration decision.
+- Verified malformed Base64, empty decoded payloads, and invalid image bytes
+  produce MCP tool errors rather than failed inference decisions.
+- Verified per-digit invalid requests produce intentional MCP tool errors.
+- Full regression suite passes: 84 tests.
