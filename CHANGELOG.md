@@ -426,3 +426,34 @@
   produce MCP tool errors rather than failed inference decisions.
 - Verified per-digit invalid requests produce intentional MCP tool errors.
 - Full regression suite passes: 84 tests.
+
+## Phase 5.3C – MCP Integration Testing
+
+### Added
+- Added automated MCP integration tests using a real MCP SDK client and
+  stdio server transport.
+- Added MCP tool-discovery coverage for the complete six-tool interface.
+- Added machine-readable contract checks for key MCP input and output schemas.
+- Added integration coverage for all read-only MCP inspection capabilities.
+- Added end-to-end MCP prediction coverage using a Base64-encoded sample image.
+- Added MCP error-boundary coverage for invalid digits, malformed Base64,
+  invalid image bytes, and empty image payloads.
+
+### Changed
+- Moved the exploratory MCP discovery client into the automated test suite as
+  `tests/test_mcp_server.py`.
+- Replaced print-based MCP diagnostics with deterministic pytest assertions.
+- Grouped related MCP assertions into four integration tests to limit repeated
+  server and TensorFlow model initialization.
+
+### Validation
+- Verified all six MCP tools are discoverable through a real MCP client session.
+- Verified key MCP input/output schemas remain machine-readable and preserve
+  the intended orchestration decision contract.
+- Verified read-only tools return expected inference, evaluation, per-digit,
+  and serving-model information.
+- Verified `digit_3_true3.png` is classified as digit 3 with an accepted
+  orchestration decision through the MCP interface.
+- Verified caller/input failures remain MCP tool errors rather than failed
+  inference decisions.
+- Full regression suite passes: 88 tests.
