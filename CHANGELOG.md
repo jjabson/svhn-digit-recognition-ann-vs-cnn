@@ -457,3 +457,14 @@
 - Verified caller/input failures remain MCP tool errors rather than failed
   inference decisions.
 - Full regression suite passes: 88 tests.
+
+### Phase 5.3D.2 — MCP Client / Tool Adapter
+
+- Added a thin agent-facing MCP client adapter over the official MCP Python SDK.
+- Added dynamic MCP tool discovery with agent-neutral `MCPToolDefinition` objects.
+- Added generic MCP tool invocation with agent-neutral `MCPToolResult` objects.
+- Preserved the distinction between MCP tool/request errors and valid application inference decisions.
+- Added Base64 image encoding at the MCP client boundary so binary transport details stay out of agent reasoning.
+- Added focused unit tests for image encoding, tool discovery, successful tool invocation, and MCP error conversion.
+- Added the `agent` package to setuptools package discovery and verified the editable installation outside the repository root.
+- Verified the adapter end-to-end against the real MCP server and application inference stack during development.
