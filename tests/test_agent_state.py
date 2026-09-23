@@ -23,6 +23,7 @@ def test_agent_state_holds_agent_execution_context() -> None:
         "tool_results": [result],
         "final_response": None,
         "selected_tool": None,
+        "selection_reason": None,
     }
 
     assert state["user_request"] == "How accurate is the model?"

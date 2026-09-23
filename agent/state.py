@@ -11,6 +11,7 @@ class AgentState(TypedDict):
     user_request: str
     image_bytes: bytes | None
     available_tools: list[MCPToolDefinition]
+    selected_tool: str | None
+    selection_reason: str | None
     tool_results: list[MCPToolResult]
     final_response: str | None
-    selected_tool: str | None

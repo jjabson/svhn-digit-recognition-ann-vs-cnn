@@ -7,6 +7,7 @@ from agent.nodes import (
     ToolExecutionClient,
     discover_tools_node,
     execute_tool_node,
+    route_after_tool_selection,
     select_tool_node,
     synthesize_response_node,
 )
@@ -41,7 +42,14 @@ def build_agent_graph(client: AgentMCPClient):
 
     graph.add_edge(START, "discover_tools")
     graph.add_edge("discover_tools", "select_tool")
-    graph.add_edge("select_tool", "execute_tool")
+    graph.add_conditional_edges(
+        "select_tool",
+        route_after_tool_selection,
+        {
+            "execute_tool": "execute_tool",
+            "synthesize_response": "synthesize_response",
+        },
+    )
     graph.add_edge("execute_tool", "synthesize_response")
     graph.add_edge("synthesize_response", END)
 

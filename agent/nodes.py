@@ -45,16 +45,32 @@ def select_tool_node(state: AgentState) -> dict:
     }
 
     selected_tool = None
+    selection_reason = "unsupported_request"
 
-    if (
+    is_accuracy_request = (
         "accurate" in request
         or "accuracy" in request
-    ) and "get_evaluation_summary" in available_tool_names:
-        selected_tool = "get_evaluation_summary"
+    )
+
+    if is_accuracy_request:
+        if "get_evaluation_summary" in available_tool_names:
+            selected_tool = "get_evaluation_summary"
+            selection_reason = "accuracy_request"
+        else:
+            selection_reason = "capability_unavailable"
 
     return {
         "selected_tool": selected_tool,
+        "selection_reason": selection_reason,
     }
+
+def route_after_tool_selection(state: AgentState) -> str:
+    """Route based on whether an MCP tool was selected."""
+
+    if state["selected_tool"] is None:
+        return "synthesize_response"
+
+    return "execute_tool"
 
 async def execute_tool_node(
     state: AgentState,
@@ -81,12 +97,56 @@ async def execute_tool_node(
 def synthesize_response_node(state: AgentState) -> dict:
     """Create a deterministic response from an MCP tool result."""
 
+    if state["selection_reason"] == "unsupported_request":
+        return {
+            "final_response": (
+                "I could not select an available tool "
+                "for that request."
+            ),
+        }
+
+    if state["selection_reason"] == "capability_unavailable":
+        return {
+            "final_response": (
+                "I understood the request, but the required "
+                "capability is not currently available."
+            ),
+        }
+
     if not state["tool_results"]:
         return {
             "final_response": "No tool result is available.",
         }
 
     result = state["tool_results"][-1]
+
+    if result.is_error:
+        return {
+            "final_response": (
+                f"Tool {result.tool_name} failed: "
+                f"{result.error_message}"
+            ),
+        }
+
+    if (
+            result.tool_name == "predict_digit"
+            and result.structured_content is not None
+    ):
+        status = result.structured_content["status"]
+        review_required = result.structured_content["review_required"]
+
+        review_message = (
+            "Review is required."
+            if review_required
+            else "Review is not required."
+        )
+
+        return {
+            "final_response": (
+                f"The inference decision reported status {status}. "
+                f"{review_message}"
+            ),
+        }
 
     if (
         result.tool_name == "get_evaluation_summary"

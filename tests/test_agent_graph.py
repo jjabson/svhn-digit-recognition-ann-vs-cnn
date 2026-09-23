@@ -6,9 +6,13 @@ from agent.state import AgentState
 
 
 class FakeMCPToolClient:
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            include_evaluation_summary: bool = True,
+    ) -> None:
         self.list_tools_call_count = 0
         self.called_tool_name: str | None = None
+        self.include_evaluation_summary = include_evaluation_summary
 
     async def call_tool(
             self,
@@ -30,12 +34,7 @@ class FakeMCPToolClient:
     async def list_tools(self) -> list[MCPToolDefinition]:
         self.list_tools_call_count += 1
 
-        return [
-            MCPToolDefinition(
-                name="get_evaluation_summary",
-                description="Return evaluation summary",
-                input_schema={"type": "object"},
-            ),
+        tools = [
             MCPToolDefinition(
                 name="predict_digit",
                 description="Predict a digit",
@@ -48,6 +47,18 @@ class FakeMCPToolClient:
             ),
         ]
 
+        if self.include_evaluation_summary:
+            tools.insert(
+                0,
+                MCPToolDefinition(
+                    name="get_evaluation_summary",
+                    description="Return evaluation summary",
+                    input_schema={"type": "object"},
+                ),
+            )
+
+        return tools
+
 def test_agent_graph_discovers_tools() -> None:
     client = FakeMCPToolClient()
     graph = build_agent_graph(client)
@@ -59,6 +70,7 @@ def test_agent_graph_discovers_tools() -> None:
         "tool_results": [],
         "final_response": None,
         "selected_tool": None,
+        "selection_reason": None,
     }
 
     result = asyncio.run(
@@ -91,4 +103,62 @@ def test_agent_graph_discovers_tools() -> None:
     assert result["final_response"] == (
         "The model achieved 95.14% accuracy "
         "on 24,000 evaluation samples."
+    )
+
+def test_agent_graph_skips_execution_without_selected_tool() -> None:
+    client = FakeMCPToolClient()
+    graph = build_agent_graph(client)
+
+    initial_state: AgentState = {
+        "user_request": "Tell me something unsupported.",
+        "image_bytes": None,
+        "available_tools": [],
+        "selected_tool": None,
+        "tool_results": [],
+        "final_response": None,
+        "selection_reason": None,
+    }
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert result["selected_tool"] is None
+    assert result["tool_results"] == []
+    assert result["final_response"] == (
+        "I could not select an available tool "
+        "for that request."
+    )
+
+    assert result["selection_reason"] == "unsupported_request"
+
+    assert client.list_tools_call_count == 1
+    assert client.called_tool_name is None
+
+def test_agent_graph_reports_unavailable_capability() -> None:
+    client = FakeMCPToolClient(
+        include_evaluation_summary=False,
+    )
+
+    graph = build_agent_graph(client)
+
+    initial_state: AgentState = {
+        "user_request": "How accurate is the model?",
+        "image_bytes": None,
+        "available_tools": [],
+        "selected_tool": None,
+        "selection_reason": None,
+        "tool_results": [],
+        "final_response": None,
+    }
+
+    result = asyncio.run(graph.ainvoke(initial_state))
+
+    assert client.called_tool_name is None
+    assert result["selected_tool"] is None
+    assert result["selection_reason"] == "capability_unavailable"
+    assert result["tool_results"] == []
+    assert result["final_response"] == (
+        "I understood the request, but the required "
+        "capability is not currently available."
     )

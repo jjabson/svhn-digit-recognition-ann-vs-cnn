@@ -468,3 +468,15 @@
 - Added focused unit tests for image encoding, tool discovery, successful tool invocation, and MCP error conversion.
 - Added the `agent` package to setuptools package discovery and verified the editable installation outside the repository root.
 - Verified the adapter end-to-end against the real MCP server and application inference stack during development.
+
+### Phase 5.3D.3.3 — Routing & Failure Semantics
+
+- Added conditional LangGraph routing after tool selection.
+- Added explicit agent selection semantics through `selection_reason`.
+- Distinguished supported requests with unavailable capabilities from unsupported requests.
+- Added defensive execution behavior when no MCP tool is selected.
+- Added deterministic synthesis for unsupported requests and unavailable capabilities.
+- Preserved the boundary between MCP/tool invocation errors and valid application inference decisions with `status="failed"`.
+- Added graph-level coverage verifying that unavailable capabilities skip MCP tool execution.
+- Expanded deterministic agent state, node, routing, synthesis, and graph regression coverage.
+- Full project regression: 108 tests passing.
