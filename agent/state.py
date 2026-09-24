@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     image_bytes: bytes | None
     available_tools: list[MCPToolDefinition]
     selected_tool: str | None
+    selected_tool_arguments: dict | None
     selection_reason: str | None
+    workflow_status: str | None
     tool_results: list[MCPToolResult]
     final_response: str | None

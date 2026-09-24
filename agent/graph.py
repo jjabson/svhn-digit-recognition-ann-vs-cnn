@@ -10,6 +10,7 @@ from agent.nodes import (
     route_after_tool_selection,
     select_tool_node,
     synthesize_response_node,
+    select_follow_up_tool_node,
 )
 from agent.state import AgentState
 from typing import Protocol
@@ -39,6 +40,18 @@ def build_agent_graph(client: AgentMCPClient):
     graph.add_node("select_tool", select_tool_node)
     graph.add_node("execute_tool", execute_tool)
     graph.add_node("synthesize_response", synthesize_response_node)
+    graph.add_node(
+        "select_follow_up_tool",
+        select_follow_up_tool_node,
+    )
+    graph.add_conditional_edges(
+        "select_follow_up_tool",
+        route_after_tool_selection,
+        {
+            "execute_tool": "execute_tool",
+            "synthesize_response": "synthesize_response",
+        },
+    )
 
     graph.add_edge(START, "discover_tools")
     graph.add_edge("discover_tools", "select_tool")
@@ -50,7 +63,10 @@ def build_agent_graph(client: AgentMCPClient):
             "synthesize_response": "synthesize_response",
         },
     )
-    graph.add_edge("execute_tool", "synthesize_response")
+    graph.add_edge(
+        "execute_tool",
+        "select_follow_up_tool",
+    )
     graph.add_edge("synthesize_response", END)
 
     return graph.compile()

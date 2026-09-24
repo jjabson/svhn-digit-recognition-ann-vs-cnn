@@ -480,3 +480,37 @@
 - Added graph-level coverage verifying that unavailable capabilities skip MCP tool execution.
 - Expanded deterministic agent state, node, routing, synthesis, and graph regression coverage.
 - Full project regression: 108 tests passing.
+
+### Phase 5.3D.4 — Multi-Tool Reasoning
+
+- Extended `AgentState` with:
+  - `selected_tool_arguments` for explicit tool-call arguments.
+  - `workflow_status` for execution-state semantics separate from request intent.
+- Extended deterministic tool selection to support worst-performing-digit analysis.
+- Added observation-driven follow-up reasoning:
+  - calls `get_evaluation_insights` to identify the worst-performing digit.
+  - derives the digit argument from the returned application data.
+  - calls `get_digit_metrics` using that derived argument.
+- Extended the LangGraph workflow with a reusable tool-execution loop:
+  - `select_tool → execute_tool → select_follow_up_tool`.
+  - continues execution when another capability is required.
+  - terminates at synthesis when no further tool is selected.
+- Preserved the distinction between:
+  - request intent via `selection_reason`.
+  - workflow execution state via `workflow_status`.
+- Added graceful handling when a required follow-up capability is unavailable:
+  - preserves useful results from completed tool calls.
+  - reports the unavailable follow-up capability without fabricating missing data.
+- Added deterministic synthesis across multiple MCP tool observations.
+- Added cross-tool semantic integrity validation so metrics are not attributed to a digit that differs from the digit identified by evaluation insights.
+- Expanded deterministic agent tests covering:
+  - multi-tool selection and execution.
+  - observation-derived tool arguments.
+  - tool-result accumulation.
+  - follow-up routing and termination.
+  - MCP tool failures.
+  - unavailable follow-up capabilities.
+  - successful multi-result synthesis.
+  - inconsistent cross-tool observations.
+- Verified the complete repository regression suite:
+  - `120 passed`.
