@@ -514,3 +514,37 @@
   - inconsistent cross-tool observations.
 - Verified the complete repository regression suite:
   - `120 passed`.
+
+## Phase 5.3D.5 – Deterministic Agent Testing
+
+### Added
+- Added graph-level coverage for unsupported requests.
+- Added graph-level coverage for failures during the second step of a
+  multi-tool workflow.
+- Added deterministic test coverage for accumulated MCP tool observations
+  across multi-tool execution.
+- Added assertions that preserve the original workflow intent across
+  follow-up tool selection and execution.
+
+### Validation
+- Verified unsupported requests terminate without invoking an MCP tool.
+- Verified a successful first tool result can drive a second tool call using
+  arguments derived from the first observation.
+- Verified second-tool MCP failures stop the workflow without retries or
+  additional tool execution.
+- Verified successful observations remain available when a later MCP tool
+  fails.
+- Verified MCP tool errors remain distinct from valid application-level
+  inference decisions.
+- Verified `selection_reason` preserves the original request intent while
+  `workflow_status` remains separate from that intent.
+- Agent state, node, and graph test suite: 30 tests passed.
+- Full project regression suite: 122 tests passed.
+
+### Result
+- Deterministic agent behavior is now protected at both node and graph
+  composition levels for supported evaluation workflows and failure paths.
+- End-to-end deterministic prediction routing remains intentionally
+  unclaimed: prediction-result synthesis is tested at the node level, but
+  the current deterministic tool selector does not route prediction
+  requests to `predict_digit`.
