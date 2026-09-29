@@ -1,8 +1,9 @@
 import asyncio
 
-from agent.graph import build_agent_graph
+from agent.graph import build_agent_graph, build_llm_agent_graph
 from agent.mcp_client import MCPToolDefinition, MCPToolResult
 from agent.state import AgentState
+from agent.llm_client import AgentReasoningDecision
 
 
 class FakeMCPToolClient:
@@ -138,6 +139,427 @@ class FakeMCPToolClient:
                 )
 
         return tools
+
+class FakeReasoningClient:
+    def __init__(
+        self,
+        decisions: list[AgentReasoningDecision],
+    ):
+        self._decisions = list(decisions)
+        self.calls = []
+
+    async def decide(
+        self,
+        user_request,
+        available_tools,
+        tool_results,
+    ):
+        self.calls.append(
+            {
+                "user_request": user_request,
+                "available_tools": available_tools,
+                "tool_results": list(tool_results),
+            }
+        )
+
+        return self._decisions.pop(0)
+
+def test_llm_agent_graph_executes_tool_then_returns_final_response():
+    mcp_client = FakeMCPToolClient()
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="get_evaluation_summary",
+                tool_arguments={},
+            ),
+            AgentReasoningDecision(
+                action="final",
+                final_response="The model achieved 95.14% accuracy.",
+            ),
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert result["final_response"] == (
+        "The model achieved 95.14% accuracy."
+    )
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert len(result["tool_results"]) == 1
+    assert result["tool_results"][0].tool_name == (
+        "get_evaluation_summary"
+    )
+
+    assert len(reasoning_client.calls) == 2
+
+    assert reasoning_client.calls[0]["tool_results"] == []
+
+    assert len(
+        reasoning_client.calls[1]["tool_results"]
+    ) == 1
+
+    assert (
+        reasoning_client.calls[1]["tool_results"][0].tool_name
+        == "get_evaluation_summary"
+    )
+
+def test_llm_agent_graph_executes_observation_driven_multi_tool_workflow():
+    mcp_client = FakeMCPToolClient(
+        include_multi_tool_capabilities=True,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="get_evaluation_insights",
+                tool_arguments={},
+            ),
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="get_digit_metrics",
+                tool_arguments={"digit": 3},
+            ),
+            AgentReasoningDecision(
+                action="final",
+                final_response=(
+                    "The model struggles most with digit 3. "
+                    "For digit 3, precision is 95.00%, "
+                    "recall is 94.00%, and F1 score is 94.50%."
+                ),
+            ),
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request=(
+            "Which digit does the model struggle with most, "
+            "and how well does it recognize that digit?"
+        ),
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert mcp_client.call_tool_calls == [
+        ("get_evaluation_insights", {}),
+        ("get_digit_metrics", {"digit": 3}),
+    ]
+
+    assert len(result["tool_results"]) == 2
+    assert result["tool_results"][0].tool_name == (
+        "get_evaluation_insights"
+    )
+    assert result["tool_results"][1].tool_name == (
+        "get_digit_metrics"
+    )
+
+    assert len(reasoning_client.calls) == 3
+
+    assert reasoning_client.calls[0]["tool_results"] == []
+
+    first_observation = (
+        reasoning_client.calls[1]["tool_results"][0]
+    )
+
+    assert first_observation.tool_name == (
+        "get_evaluation_insights"
+    )
+    assert (
+        first_observation.structured_content[
+            "worst_performing_digit"
+        ]
+        == 3
+    )
+
+    assert len(
+        reasoning_client.calls[2]["tool_results"]
+    ) == 2
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert result["final_response"] == (
+        "The model struggles most with digit 3. "
+        "For digit 3, precision is 95.00%, "
+        "recall is 94.00%, and F1 score is 94.50%."
+    )
+
+def test_llm_agent_graph_preserves_tool_error_for_reasoning():
+    mcp_client = FakeMCPToolClient(
+        include_multi_tool_capabilities=True,
+        fail_evaluation_insights=True,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="get_evaluation_insights",
+                tool_arguments={},
+            ),
+            AgentReasoningDecision(
+                action="final",
+                final_response=(
+                    "I could not retrieve the evaluation insights."
+                ),
+            ),
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request=(
+            "Which digit does the model struggle with most?"
+        ),
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert mcp_client.call_tool_calls == [
+        ("get_evaluation_insights", {}),
+    ]
+
+    assert len(result["tool_results"]) == 1
+
+    tool_result = result["tool_results"][0]
+
+    assert tool_result.tool_name == "get_evaluation_insights"
+    assert tool_result.is_error is True
+    assert tool_result.structured_content is None
+    assert tool_result.error_message == (
+        "Evaluation insights unavailable."
+    )
+
+    assert len(reasoning_client.calls) == 2
+
+    observed_error = (
+        reasoning_client.calls[1]["tool_results"][0]
+    )
+
+    assert observed_error.is_error is True
+    assert observed_error.error_message == (
+        "Evaluation insights unavailable."
+    )
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert result["final_response"] == (
+        "I could not retrieve the evaluation insights."
+    )
+
+def test_llm_agent_graph_does_not_execute_unavailable_tool():
+    mcp_client = FakeMCPToolClient()
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="nonexistent_tool",
+                tool_arguments={},
+            ),
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request="Use a capability that does not exist.",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert mcp_client.call_tool_calls == []
+
+    assert result["tool_results"] == []
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert result["workflow_status"] == (
+        "invalid_llm_tool_selection"
+    )
+
+    assert result["final_response"] == (
+        "The reasoning model selected a capability "
+        "that is not available."
+    )
+
+    assert len(reasoning_client.calls) == 1
+
+def test_llm_agent_graph_handles_missing_final_response():
+    mcp_client = FakeMCPToolClient()
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="final",
+                final_response=None,
+            ),
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert mcp_client.call_tool_calls == []
+    assert result["tool_results"] == []
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert result["workflow_status"] == (
+        "invalid_llm_final_response"
+    )
+
+    assert result["final_response"] == (
+        "The reasoning model did not provide "
+        "a final response."
+    )
+
+    assert len(reasoning_client.calls) == 1
+
+def test_llm_agent_graph_stops_after_max_tool_calls():
+    mcp_client = FakeMCPToolClient()
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="get_evaluation_summary",
+                tool_arguments={},
+            )
+            for _ in range(6)
+        ]
+    )
+
+    graph = build_llm_agent_graph(
+        client=mcp_client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = AgentState(
+        user_request="Keep checking the evaluation summary.",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert len(mcp_client.call_tool_calls) == 5
+
+    assert all(
+        tool_name == "get_evaluation_summary"
+        for tool_name, _ in mcp_client.call_tool_calls
+    )
+
+    assert len(result["tool_results"]) == 5
+
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+
+    assert result["workflow_status"] == (
+        "llm_tool_call_limit_reached"
+    )
+
+    assert result["final_response"] == (
+        "The agent reached the maximum number "
+        "of tool calls for this request."
+    )
+
+    assert len(reasoning_client.calls) == 6
 
 def test_agent_graph_discovers_tools() -> None:
     client = FakeMCPToolClient()

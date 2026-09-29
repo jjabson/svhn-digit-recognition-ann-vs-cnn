@@ -548,3 +548,15 @@
   unclaimed: prediction-result synthesis is tested at the node level, but
   the current deterministic tool selector does not route prediction
   requests to `predict_digit`.
+
+### Phase 5.3D.6.5 — LLM Guardrails & Deterministic Testing
+
+- Added deterministic validation for LLM-selected MCP capabilities.
+- Reject unavailable or missing tool selections before MCP execution.
+- Reject malformed final decisions that omit a final response.
+- Added a bounded LLM tool-execution loop with a maximum of five MCP calls per request.
+- Added graph-level tests proving rejected LLM decisions do not execute MCP tools.
+- Added graph-level coverage proving malformed final decisions terminate in controlled state.
+- Added graph-level coverage proving repeated valid tool requests cannot create an unbounded execution loop.
+- Preserved MCP as the authoritative owner of tool argument validation while keeping capability and workflow safety in the agent layer.
+- Expanded repository regression coverage to 143 passing tests.

@@ -2,6 +2,9 @@ import asyncio
 
 from agent.mcp_client import MCPToolDefinition, MCPToolResult
 from agent.state import AgentState
+import asyncio
+
+from agent.llm_client import AgentReasoningDecision
 
 from agent.nodes import (
     discover_tools_node,
@@ -10,6 +13,8 @@ from agent.nodes import (
     select_tool_node,
     synthesize_response_node,
     select_follow_up_tool_node,
+    llm_reasoning_node,
+    route_after_llm_reasoning,
 )
 
 class FakeMCPToolClient:
@@ -55,6 +60,331 @@ class FakeToolExecutionClient:
             error_message=None,
         )
 
+class FakeReasoningClient:
+    def __init__(self, decision: AgentReasoningDecision):
+        self.decision = decision
+        self.calls = []
+
+    async def decide(
+        self,
+        user_request,
+        available_tools,
+        tool_results,
+    ):
+        self.calls.append(
+            {
+                "user_request": user_request,
+                "available_tools": available_tools,
+                "tool_results": tool_results,
+            }
+        )
+
+        return self.decision
+
+def test_llm_reasoning_node_maps_tool_decision_to_state():
+    state = AgentState(
+        user_request="How well does the model recognize digit 3?",
+        image_bytes=None,
+        available_tools=[
+            MCPToolDefinition(
+                name="get_digit_metrics",
+                description="Return metrics for one digit.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "digit": {"type": "integer"},
+                    },
+                    "required": ["digit"],
+                },
+            )
+        ],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="tool",
+            tool_name="get_digit_metrics",
+            tool_arguments={"digit": 3},
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": "get_digit_metrics",
+        "selected_tool_arguments": {"digit": 3},
+        "workflow_status": None,
+        "final_response": None,
+    }
+
+    assert len(reasoning_client.calls) == 1
+    assert reasoning_client.calls[0]["user_request"] == (
+        "How well does the model recognize digit 3?"
+    )
+    assert (
+            reasoning_client.calls[0]["available_tools"]
+            == state["available_tools"]
+    )
+    assert reasoning_client.calls[0]["tool_results"] == []
+
+def test_llm_reasoning_node_maps_final_decision_to_state():
+    state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="final",
+            final_response="The model achieved 95.14% accuracy.",
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": None,
+        "final_response": "The model achieved 95.14% accuracy.",
+    }
+
+    assert len(reasoning_client.calls) == 1
+
+def test_route_after_llm_reasoning_routes_tool_decision_to_execution():
+    state = AgentState(
+        user_request="How well does the model recognize digit 3?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool="get_digit_metrics",
+        selected_tool_arguments={"digit": 3},
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    assert route_after_llm_reasoning(state) == "execute_tool"
+
+def test_route_after_llm_reasoning_routes_final_response_to_end():
+    state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response="The model achieved 95.14% accuracy.",
+    )
+
+    assert route_after_llm_reasoning(state) == "end"
+
+def test_llm_reasoning_node_rejects_unavailable_tool_selection():
+    available_tool = MCPToolDefinition(
+        name="get_evaluation_summary",
+        description="Return evaluation summary.",
+        input_schema={"type": "object"},
+    )
+
+    state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[available_tool],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="tool",
+            tool_name="nonexistent_tool",
+            tool_arguments={},
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": "invalid_llm_tool_selection",
+        "final_response": (
+            "The reasoning model selected a capability "
+            "that is not available."
+        ),
+    }
+
+def test_llm_reasoning_node_rejects_missing_tool_name():
+    state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[
+            MCPToolDefinition(
+                name="get_evaluation_summary",
+                description="Return evaluation summary.",
+                input_schema={"type": "object"},
+            )
+        ],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="tool",
+            tool_name=None,
+            tool_arguments={},
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": "invalid_llm_tool_selection",
+        "final_response": (
+            "The reasoning model selected a capability "
+            "that is not available."
+        ),
+    }
+
+def test_llm_reasoning_node_rejects_missing_final_response():
+    state = AgentState(
+        user_request="How accurate is the model?",
+        image_bytes=None,
+        available_tools=[],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=[],
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="final",
+            final_response=None,
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": "invalid_llm_final_response",
+        "final_response": (
+            "The reasoning model did not provide "
+            "a final response."
+        ),
+    }
+
+def test_llm_reasoning_node_rejects_tool_after_max_tool_calls():
+    previous_results = [
+        MCPToolResult(
+            tool_name="get_evaluation_summary",
+            structured_content={"accuracy": 0.951375},
+            is_error=False,
+            error_message=None,
+        )
+        for _ in range(5)
+    ]
+
+    state = AgentState(
+        user_request="Keep checking the evaluation summary.",
+        image_bytes=None,
+        available_tools=[
+            MCPToolDefinition(
+                name="get_evaluation_summary",
+                description="Return evaluation summary.",
+                input_schema={
+                    "type": "object",
+                    "properties": {},
+                },
+            )
+        ],
+        selected_tool=None,
+        selected_tool_arguments=None,
+        selection_reason=None,
+        workflow_status=None,
+        tool_results=previous_results,
+        final_response=None,
+    )
+
+    reasoning_client = FakeReasoningClient(
+        AgentReasoningDecision(
+            action="tool",
+            tool_name="get_evaluation_summary",
+            tool_arguments={},
+        )
+    )
+
+    update = asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert update == {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": "llm_tool_call_limit_reached",
+        "final_response": (
+            "The agent reached the maximum number "
+            "of tool calls for this request."
+        ),
+    }
 
 def test_discover_tools_node_returns_available_tools() -> None:
     state: AgentState = {
@@ -66,6 +396,7 @@ def test_discover_tools_node_returns_available_tools() -> None:
         "selection_reason": None,
         "tool_results": [],
         "final_response": None,
+        "workflow_status": None,
     }
 
     client = FakeMCPToolClient()
@@ -101,6 +432,7 @@ def test_select_tool_node_selects_evaluation_summary_for_accuracy_request() -> N
         "selection_reason": None,
         "tool_results": [],
         "final_response": None,
+        "workflow_status": None,
     }
 
     update = select_tool_node(state)
@@ -121,6 +453,7 @@ def test_select_tool_node_does_not_select_unavailable_tool() -> None:
         "selection_reason": None,
         "tool_results": [],
         "final_response": None,
+        "workflow_status": None,
     }
 
     update = select_tool_node(state)

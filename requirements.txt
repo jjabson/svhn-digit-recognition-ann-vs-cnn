@@ -9,3 +9,4 @@ matplotlib
 scikit-learn
 mcp[cli]==2.2.0
 langgraph==1.2.11
+openai==3.19.2

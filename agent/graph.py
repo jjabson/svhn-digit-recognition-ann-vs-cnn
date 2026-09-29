@@ -11,9 +11,12 @@ from agent.nodes import (
     select_tool_node,
     synthesize_response_node,
     select_follow_up_tool_node,
+    llm_reasoning_node,
+    route_after_llm_reasoning,
 )
 from agent.state import AgentState
 from typing import Protocol
+from agent.llm_client import AgentReasoningClient
 
 class AgentMCPClient(
     ToolDiscoveryClient,
@@ -68,6 +71,46 @@ def build_agent_graph(client: AgentMCPClient):
         "select_follow_up_tool",
     )
     graph.add_edge("synthesize_response", END)
+
+    return graph.compile()
+
+def build_llm_agent_graph(
+    client: AgentMCPClient,
+    reasoning_client: AgentReasoningClient,
+):
+    """Build the LLM-driven agent workflow."""
+
+    async def discover_tools(state):
+        return await discover_tools_node(state, client)
+
+    async def reason(state):
+        return await llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+
+    async def execute_tool(state):
+        return await execute_tool_node(state, client)
+
+    graph = StateGraph(AgentState)
+
+    graph.add_node("discover_tools", discover_tools)
+    graph.add_node("reason", reason)
+    graph.add_node("execute_tool", execute_tool)
+
+    graph.add_edge(START, "discover_tools")
+    graph.add_edge("discover_tools", "reason")
+
+    graph.add_conditional_edges(
+        "reason",
+        route_after_llm_reasoning,
+        {
+            "execute_tool": "execute_tool",
+            "end": END,
+        },
+    )
+
+    graph.add_edge("execute_tool", "reason")
 
     return graph.compile()
 

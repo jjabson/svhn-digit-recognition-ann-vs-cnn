@@ -5,6 +5,9 @@ from typing import Protocol
 from agent.mcp_client import MCPToolDefinition, MCPToolResult
 from agent.state import AgentState
 
+from agent.llm_client import AgentReasoningClient
+
+MAX_LLM_TOOL_CALLS = 5
 
 class ToolDiscoveryClient(Protocol):
     """Capability required by nodes that discover MCP tools."""
@@ -33,6 +36,71 @@ async def discover_tools_node(
 
     return {
         "available_tools": tools,
+    }
+
+async def llm_reasoning_node(
+    state: AgentState,
+    reasoning_client: AgentReasoningClient,
+) -> dict:
+    """Use the reasoning client to choose the agent's next action."""
+
+    decision = await reasoning_client.decide(
+        user_request=state["user_request"],
+        available_tools=state["available_tools"],
+        tool_results=state["tool_results"],
+    )
+
+    if decision.action == "tool":
+        if len(state["tool_results"]) >= MAX_LLM_TOOL_CALLS:
+            return {
+                "selected_tool": None,
+                "selected_tool_arguments": None,
+                "workflow_status": "llm_tool_call_limit_reached",
+                "final_response": (
+                    "The agent reached the maximum number "
+                    "of tool calls for this request."
+                ),
+            }
+
+        available_tool_names = {
+            tool.name
+            for tool in state["available_tools"]
+        }
+
+        if decision.tool_name not in available_tool_names:
+            return {
+                "selected_tool": None,
+                "selected_tool_arguments": None,
+                "workflow_status": "invalid_llm_tool_selection",
+                "final_response": (
+                    "The reasoning model selected a capability "
+                    "that is not available."
+                ),
+            }
+
+        return {
+            "selected_tool": decision.tool_name,
+            "selected_tool_arguments": decision.tool_arguments,
+            "workflow_status": None,
+            "final_response": None,
+        }
+
+    if decision.final_response is None:
+        return {
+            "selected_tool": None,
+            "selected_tool_arguments": None,
+            "workflow_status": "invalid_llm_final_response",
+            "final_response": (
+                "The reasoning model did not provide "
+                "a final response."
+            ),
+        }
+
+    return {
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "workflow_status": None,
+        "final_response": decision.final_response,
     }
 
 def select_tool_node(state: AgentState) -> dict:
@@ -299,3 +367,14 @@ def select_follow_up_tool_node(state: AgentState) -> dict:
         "selected_tool": None,
         "selected_tool_arguments": None,
     }
+
+def route_after_llm_reasoning(state: AgentState) -> str:
+    """Route according to the action produced by LLM reasoning."""
+
+    if state["selected_tool"] is not None:
+        return "execute_tool"
+
+    if state["final_response"] is not None:
+        return "end"
+
+    return "end"
