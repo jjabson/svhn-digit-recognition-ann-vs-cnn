@@ -1,6 +1,7 @@
 """LangGraph nodes for agent execution."""
 
 from typing import Protocol
+import base64
 
 from agent.mcp_client import MCPToolDefinition, MCPToolResult
 from agent.state import AgentState
@@ -48,6 +49,7 @@ async def llm_reasoning_node(
         user_request=state["user_request"],
         available_tools=state["available_tools"],
         tool_results=state["tool_results"],
+        image_available=state["image_bytes"] is not None,
     )
 
     if decision.action == "tool":
@@ -168,9 +170,31 @@ async def execute_tool_node(
             "tool_results": state["tool_results"],
         }
 
+    arguments = state["selected_tool_arguments"]
+
+    if selected_tool == "predict_digit":
+        image_bytes = state["image_bytes"]
+
+        if image_bytes is None:
+            return {
+                "selected_tool": None,
+                "selected_tool_arguments": None,
+                "workflow_status": "prediction_image_missing",
+                "tool_results": state["tool_results"],
+                "final_response": (
+                    "An image is required to make a prediction."
+                ),
+            }
+
+        arguments = {
+            "image_data": base64.b64encode(
+                image_bytes
+            ).decode("ascii"),
+        }
+
     result = await client.call_tool(
-        state["selected_tool"],
-        arguments=state["selected_tool_arguments"],
+        selected_tool,
+        arguments=arguments,
     )
 
     return {
@@ -378,3 +402,13 @@ def route_after_llm_reasoning(state: AgentState) -> str:
         return "end"
 
     return "end"
+
+def route_after_llm_tool_execution(
+    state: AgentState,
+) -> str:
+    """Route after an LLM-selected tool execution attempt."""
+
+    if state["workflow_status"] == "prediction_image_missing":
+        return "end"
+
+    return "reason"

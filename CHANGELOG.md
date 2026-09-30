@@ -560,3 +560,29 @@
 - Added graph-level coverage proving repeated valid tool requests cannot create an unbounded execution loop.
 - Preserved MCP as the authoritative owner of tool argument validation while keeping capability and workflow safety in the agent layer.
 - Expanded repository regression coverage to 143 passing tests.
+
+### Phase 5.3D.6.6 — Live MCP + LLM Demonstration
+
+- Verified live OpenAI Responses API connectivity and authentication using the configured API environment.
+- Verified the `OpenAIReasoningClient` against a real LLM for both final-response and MCP tool-selection decisions.
+- Verified that authoritative `MCPToolResult` observations can be supplied back to the real LLM for grounded final-response synthesis.
+- Verified live MCP stdio transport, session initialization, dynamic discovery of all six agent-accessible application capabilities, and structured tool execution.
+- Demonstrated an end-to-end real LLM-to-MCP reasoning cycle in which the LLM dynamically selected `get_evaluation_summary`, the MCP server returned authoritative evaluation data, and the LLM synthesized the resulting model accuracy without redefining application-owned facts.
+- Demonstrated the complete live LangGraph workflow across MCP discovery, LLM reasoning, MCP execution, observation, repeated reasoning, and graph termination.
+- Demonstrated live observation-driven multi-tool reasoning using `get_evaluation_insights` followed by `get_digit_metrics`.
+- Verified that the second tool request was derived from the first authoritative observation: the agent identified digit `3` as the worst-performing class and subsequently requested detailed metrics for digit `3`.
+- Verified semantic consistency across the multi-tool observations, including matching precision, recall, F1 score, and support for the identified worst-performing digit.
+- Verified that the LLM preserved authoritative evaluation facts while synthesizing the final response, including the most common `3 → 5` misclassification with 73 occurrences.
+- Confirmed correct terminal agent state after live single-tool and multi-tool workflows: no pending tool selection, preserved tool-result history, no workflow error, and a completed final response.
+- Kept live API verification separate from the deterministic unit and graph test suite so routine regression testing remains reproducible, network-independent, and free of external API usage.
+- Added an explicit `image_available` reasoning signal so the LLM can determine when image-based MCP capabilities are applicable without exposing raw image bytes or Base64 image data to the reasoning model.
+- Added an image tool-argument boundary that converts `AgentState.image_bytes` to Base64 only when executing the `predict_digit` MCP capability.
+- Added deterministic guardrails for prediction requests without image data, preventing MCP execution, terminating the workflow cleanly, and returning a controlled user-facing response.
+- Added node-, graph-, and provider-level tests covering image availability propagation, image transport encoding, missing-image termination, and LLM image-awareness context.
+- Demonstrated live production prediction through the complete LangGraph → LLM → MCP → production inference path using `sample_images/digit_3_true3.png`.
+- Verified that the live production workflow selected `predict_digit`, predicted digit `3` with approximately 99.9998% confidence, preserved the application-owned `accepted` status, required no fallback, and required no review.
+- Demonstrated a flagship observation-driven workflow in which the agent first performed live production inference, derived predicted digit `3` from the authoritative prediction result, and then autonomously requested `get_digit_metrics` for digit `3`.
+- Verified that the flagship workflow combined current production inference with authoritative historical evaluation metrics for the predicted class: 96.15% precision, 91.67% recall, 93.86% F1 score, and 2,400 evaluation examples.
+- Confirmed that raw image bytes remain in agent execution state, image availability is exposed to the LLM only as a semantic boolean, and Base64 encoding occurs only at the MCP tool-execution boundary.
+- Completed the live MCP + LLM demonstration with real LLM reasoning, dynamic MCP capability discovery, production ML inference, observation-derived multi-tool reasoning, and grounded final-response synthesis.
+- Expanded repository regression coverage to 148 passing tests.

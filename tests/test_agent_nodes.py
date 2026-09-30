@@ -66,10 +66,11 @@ class FakeReasoningClient:
         self.calls = []
 
     async def decide(
-        self,
-        user_request,
-        available_tools,
-        tool_results,
+            self,
+            user_request,
+            available_tools,
+            tool_results,
+            image_available,
     ):
         self.calls.append(
             {
@@ -1119,3 +1120,155 @@ def test_synthesize_response_node_rejects_mismatched_digit_metrics() -> None:
             "are for digit 7."
         ),
     }
+
+def test_execute_tool_node_encodes_image_for_prediction():
+    import asyncio
+    import base64
+
+    class RecordingToolClient:
+        def __init__(self):
+            self.calls = []
+
+        async def call_tool(self, name, arguments=None):
+            self.calls.append(
+                {
+                    "name": name,
+                    "arguments": arguments,
+                }
+            )
+
+            return MCPToolResult(
+                tool_name=name,
+                structured_content={
+                    "selected_model": "cnn",
+                    "predicted_digit": 3,
+                    "confidence": 0.99,
+                    "status": "accepted",
+                    "decision_reason": "Prediction accepted.",
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                    "review_required": False,
+                },
+                is_error=False,
+                error_message=None,
+            )
+
+    image_bytes = b"fake-image-bytes"
+
+    state = {
+        "user_request": "Predict this digit.",
+        "image_bytes": image_bytes,
+        "available_tools": [],
+        "selected_tool": "predict_digit",
+        "selected_tool_arguments": {},
+        "selection_reason": None,
+        "workflow_status": None,
+        "tool_results": [],
+        "final_response": None,
+    }
+
+    client = RecordingToolClient()
+
+    result = asyncio.run(
+        execute_tool_node(state, client)
+    )
+
+    assert len(client.calls) == 1
+    assert client.calls[0]["name"] == "predict_digit"
+    assert client.calls[0]["arguments"] == {
+        "image_data": base64.b64encode(
+            image_bytes
+        ).decode("ascii")
+    }
+
+    assert len(result["tool_results"]) == 1
+    assert result["tool_results"][0].tool_name == "predict_digit"
+
+def test_execute_tool_node_does_not_predict_without_image():
+    import asyncio
+
+    class RecordingToolClient:
+        def __init__(self):
+            self.calls = []
+
+        async def call_tool(self, name, arguments=None):
+            self.calls.append(
+                {
+                    "name": name,
+                    "arguments": arguments,
+                }
+            )
+
+            raise AssertionError(
+                "MCP should not be called without image bytes."
+            )
+
+    state = {
+        "user_request": "Predict this digit.",
+        "image_bytes": None,
+        "available_tools": [],
+        "selected_tool": "predict_digit",
+        "selected_tool_arguments": {},
+        "selection_reason": None,
+        "workflow_status": None,
+        "tool_results": [],
+        "final_response": None,
+    }
+
+    client = RecordingToolClient()
+
+    result = asyncio.run(
+        execute_tool_node(state, client)
+    )
+
+    assert client.calls == []
+    assert result["workflow_status"] == "prediction_image_missing"
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+    assert result["tool_results"] == []
+
+    assert result["final_response"] == (
+        "An image is required to make a prediction."
+    )
+
+def test_llm_reasoning_node_reports_image_availability():
+    class RecordingReasoningClient:
+        def __init__(self) -> None:
+            self.image_available = None
+
+        async def decide(
+            self,
+            user_request,
+            available_tools,
+            tool_results,
+            image_available,
+        ):
+            self.image_available = image_available
+
+            return AgentReasoningDecision(
+                action="final",
+                final_response="Image availability recorded.",
+            )
+
+    reasoning_client = RecordingReasoningClient()
+
+    state: AgentState = {
+        "user_request": "Predict this digit.",
+        "image_bytes": b"fake-image-bytes",
+        "available_tools": [],
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "selection_reason": None,
+        "workflow_status": None,
+        "tool_results": [],
+        "final_response": None,
+    }
+
+    asyncio.run(
+        llm_reasoning_node(
+            state,
+            reasoning_client,
+        )
+    )
+
+    assert reasoning_client.image_available is True

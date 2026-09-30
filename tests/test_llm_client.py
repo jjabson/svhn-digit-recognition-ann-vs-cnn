@@ -97,6 +97,7 @@ def test_openai_decide_returns_final_response():
             user_request="How accurate is the model?",
             available_tools=[tool],
             tool_results=[],
+            image_available=False,
         )
     )
 
@@ -165,6 +166,7 @@ def test_openai_decide_returns_tool_request():
             user_request="How well does the model recognize digit 3?",
             available_tools=[tool],
             tool_results=[],
+            image_available=False,
         )
     )
 
@@ -240,6 +242,7 @@ def test_openai_decide_includes_prior_tool_observations():
             ),
             available_tools=[],
             tool_results=[tool_result],
+            image_available=False,
         )
     )
 
@@ -255,3 +258,44 @@ def test_openai_decide_includes_prior_tool_observations():
     assert "Previous MCP tool observations:" in captured_request["input"]
     assert '"tool_name": "get_evaluation_insights"' in captured_request["input"]
     assert '"worst_performing_digit": 3' in captured_request["input"]
+
+def test_openai_reasoning_client_includes_image_availability():
+    import asyncio
+
+    class FakeResponses:
+        def __init__(self):
+            self.kwargs = None
+
+        async def create(self, **kwargs):
+            self.kwargs = kwargs
+
+            class Response:
+                output = []
+                output_text = "Prediction request understood."
+
+            return Response()
+
+    class FakeOpenAIClient:
+        def __init__(self):
+            self.responses = FakeResponses()
+
+    fake_client = FakeOpenAIClient()
+
+    reasoning_client = OpenAIReasoningClient(
+        model="test-model",
+        client=fake_client,
+    )
+
+    asyncio.run(
+        reasoning_client.decide(
+            user_request="Predict this digit.",
+            available_tools=[],
+            tool_results=[],
+            image_available=True,
+        )
+    )
+
+    assert (
+        "An image is available"
+        in fake_client.responses.kwargs["input"]
+    )

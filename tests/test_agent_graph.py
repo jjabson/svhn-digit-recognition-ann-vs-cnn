@@ -149,10 +149,11 @@ class FakeReasoningClient:
         self.calls = []
 
     async def decide(
-        self,
-        user_request,
-        available_tools,
-        tool_results,
+            self,
+            user_request,
+            available_tools,
+            tool_results,
+            image_available,
     ):
         self.calls.append(
             {
@@ -891,3 +892,45 @@ def test_agent_graph_handles_unsupported_request_without_tool_call() -> None:
         "I could not select an available tool "
         "for that request."
     )
+
+def test_llm_graph_stops_when_prediction_image_is_missing():
+    client = FakeMCPToolClient()
+
+    reasoning_client = FakeReasoningClient(
+        decisions=[
+            AgentReasoningDecision(
+                action="tool",
+                tool_name="predict_digit",
+                tool_arguments={},
+            ),
+        ],
+    )
+
+    graph = build_llm_agent_graph(
+        client=client,
+        reasoning_client=reasoning_client,
+    )
+
+    initial_state = {
+        "user_request": "Predict this digit.",
+        "image_bytes": None,
+        "available_tools": [],
+        "selected_tool": None,
+        "selected_tool_arguments": None,
+        "selection_reason": None,
+        "workflow_status": None,
+        "tool_results": [],
+        "final_response": None,
+    }
+
+    result = asyncio.run(
+        graph.ainvoke(initial_state)
+    )
+
+    assert client.call_tool_calls == []
+    assert len(reasoning_client.calls) == 1
+
+    assert result["workflow_status"] == "prediction_image_missing"
+    assert result["selected_tool"] is None
+    assert result["selected_tool_arguments"] is None
+    assert result["tool_results"] == []

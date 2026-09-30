@@ -13,6 +13,7 @@ from agent.nodes import (
     select_follow_up_tool_node,
     llm_reasoning_node,
     route_after_llm_reasoning,
+    route_after_llm_tool_execution,
 )
 from agent.state import AgentState
 from typing import Protocol
@@ -110,7 +111,14 @@ def build_llm_agent_graph(
         },
     )
 
-    graph.add_edge("execute_tool", "reason")
+    graph.add_conditional_edges(
+        "execute_tool",
+        route_after_llm_tool_execution,
+        {
+            "reason": "reason",
+            "end": END,
+        },
+    )
 
     return graph.compile()
 

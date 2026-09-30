@@ -24,6 +24,7 @@ class AgentReasoningClient(Protocol):
         user_request: str,
         available_tools: list[MCPToolDefinition],
         tool_results: list[MCPToolResult],
+        image_available: bool,
     ) -> AgentReasoningDecision:
         """Return the agent's next reasoning decision."""
         ...
@@ -67,6 +68,7 @@ class OpenAIReasoningClient:
             user_request: str,
             available_tools: list[MCPToolDefinition],
             tool_results: list[MCPToolResult],
+            image_available: bool,
     ) -> AgentReasoningDecision:
         """Ask OpenAI for the agent's next reasoning decision."""
 
@@ -76,6 +78,11 @@ class OpenAIReasoningClient:
         ]
 
         input_text = user_request
+
+        if image_available:
+            input_text += (
+                "\n\nAn image is available for image-based tools."
+            )
 
         if tool_results:
             input_text += (
