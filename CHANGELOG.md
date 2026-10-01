@@ -586,3 +586,15 @@
 - Confirmed that raw image bytes remain in agent execution state, image availability is exposed to the LLM only as a semantic boolean, and Base64 encoding occurs only at the MCP tool-execution boundary.
 - Completed the live MCP + LLM demonstration with real LLM reasoning, dynamic MCP capability discovery, production ML inference, observation-derived multi-tool reasoning, and grounded final-response synthesis.
 - Expanded repository regression coverage to 148 passing tests.
+
+### Phase 5.3D.7.1 — Interactive Standalone Agent Runner
+
+- Added a standalone interactive `agent.demo` host for running the SVHN ML System Analyst Agent from the command line.
+- Composed the existing MCP client, OpenAI reasoning adapter, and LangGraph workflow without duplicating application or tool-selection logic in the demo host.
+- Added natural-language interactive requests with clean `quit`, `exit`, EOF, and keyboard-interrupt handling.
+- Added validation requiring `OPENAI_API_KEY` before starting the live agent.
+- Added optional `--trace` mode exposing executed MCP capabilities and authoritative tool observations without exposing private LLM reasoning.
+- Demonstrated live autonomous tool selection in which the agent answered a model-performance question using only `get_evaluation_insights` when that capability contained sufficient information.
+- Demonstrated live observation-driven multi-tool reasoning in which the agent first used `get_evaluation_insights`, derived digit `3` as the worst-performing class, and then autonomously invoked `get_digit_metrics` for that derived digit.
+- Verified that the standalone agent contains no hardcoded worst-performing digit, evaluation metrics, MCP tool sequence, inference thresholds, or application policy.
+- Added deterministic unit coverage for the demo banner, empty trace output, successful MCP result tracing, and MCP error tracing.
