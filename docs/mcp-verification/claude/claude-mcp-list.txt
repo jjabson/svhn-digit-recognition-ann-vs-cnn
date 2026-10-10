@@ -1,0 +1,20 @@
+Prompt:
+claude mcp list
+
+claude code response:
+ Checking MCP server health…
+
+     claude.ai Claude Docs: https://api.anthropic.com/v1/pages/mcp - ✔ Connected
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+⏺ All five MCP servers are connected:
+
+  ┌────────────────────────┬────────────────────────────────────────┬─────────────┐
+  │         Server         │          Transport / command           │   Status    │
+  ├────────────────────────┼────────────────────────────────────────┼─────────────┤
+  │ svhn                   │ .venv/bin/python -m mcp_server.server  │ ✔ Connected │
+  └────────────────────────┴────────────────────────────────────────┴─────────────┘
+
+  The svhn server runs from the virtualenv in /Users/jblaze/PycharmProjects/PythonProject, a different project directory from this repo (svhn-digit-recognition-ann-vs-cnn). That may be intended. But if you change mcp_server in
+  this repo, the running server won't pick up those changes.

@@ -29,3 +29,6 @@ data/*.hdf5
 
 # uv dependency lock file
 uv.lock
+
+generated/runtime_state.db
+generated/approval_checkpoints.db:q

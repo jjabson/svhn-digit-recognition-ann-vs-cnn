@@ -598,3 +598,47 @@
 - Demonstrated live observation-driven multi-tool reasoning in which the agent first used `get_evaluation_insights`, derived digit `3` as the worst-performing class, and then autonomously invoked `get_digit_metrics` for that derived digit.
 - Verified that the standalone agent contains no hardcoded worst-performing digit, evaluation metrics, MCP tool sequence, inference thresholds, or application policy.
 - Added deterministic unit coverage for the demo banner, empty trace output, successful MCP result tracing, and MCP error tracing.
+
+### Added
+
+- Added durable inference runtime configuration persistence using SQLite.
+  - Introduced `InferenceConfigStore` backed by `generated/runtime_state.db`.
+  - Persisted approved confidence-threshold changes across MCP/Python process restarts.
+  - Preserved `DEFAULT_INFERENCE_CONFIG` as the bootstrap fallback when no persisted runtime state exists.
+  - Added validation on loaded persisted configuration so invalid state fails fast.
+  - Ensured persistence failures do not replace the active in-memory configuration.
+
+- Added durable LangGraph human-in-the-loop checkpoint persistence.
+  - Replaced the runtime-only `InMemorySaver` path with an injectable checkpoint abstraction.
+  - Added SQLite-backed approval checkpoints using `SqliteSaver`.
+  - Introduced `generated/approval_checkpoints.db` for durable approval workflow state.
+  - Enabled interrupted approval workflows to survive MCP process termination and resume using the original `thread_id`.
+  - Kept deterministic authorization and controlled action execution in the application layer while LangGraph remains responsible for pause/resume workflow state.
+
+- Added runtime persistence diagnostics.
+  - Added runtime instance identity tracking to distinguish MCP connection restarts from actual Python-process replacement.
+  - Extended runtime debug output with process, configuration service, approval graph, and approval checkpointer identities.
+
+### Changed
+
+- Updated `InferenceConfigService` to optionally load and persist runtime configuration through `InferenceConfigStore`.
+- Updated the MCP runtime so inference, controlled actions, and configuration reads share the same persistent `InferenceConfigService`.
+- Updated `build_approval_graph()` to accept an injected checkpointer while retaining `InMemorySaver` as the default for isolated tests.
+- Updated MCP read-only configuration tests so they no longer assume the active confidence threshold is always the default `0.90`.
+
+### Verified
+
+- Verified the complete runtime configuration lifecycle:
+  - clean bootstrap starts at the default `0.90`;
+  - pending approval does not change active configuration;
+  - approved change to `0.95` is persisted;
+  - after terminating the MCP Python process, a new runtime restores `0.95` from SQLite.
+
+- Verified durable HITL recovery:
+  - created a pending threshold change from `0.95` to `0.92`;
+  - terminated the MCP Python process before approval;
+  - confirmed a new runtime instance recovered with the active threshold still at `0.95`;
+  - resumed the original pre-crash approval `thread_id`;
+  - confirmed the resumed approval executed and persisted the new `0.92` threshold.
+
+- Full regression suite: **222 tests passed**.

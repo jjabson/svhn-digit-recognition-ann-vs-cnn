@@ -1,0 +1,39 @@
+Prompt:
+Use the image at ./sample_images/digit_3_true3.png.
+
+Predict the digit using the svhn MCP server, then tell me how the model historically performs on that predicted digit.
+
+Use the svhn MCP tools as needed.
+Do not rely on the filename as the answer.
+Do not inspect source code.
+
+VS Code response:
+I’m classifying the provided digit image with the SVHN prediction tool and then checking the class-level performance for that predicted digit.
+
+Ran `predict_digit`
+Completed with input: {
+  "image_data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAACrElEQVR4nBWTx67jVhBEO93AIGrwZmHYS/+ff9sG7IeRKIm8udvgtnAWFVD4VzOP6ZB1cc4JhHHo8Uo0bcv7jIQgvw+Qcd54meUCPOS2Gw1hcqKAKH8CUfocOs/M7NhTz9ytMJFIV0T5A1mO70thQBIvhjEQIiHBMABpCATtPHJ26ubFUR+9tmZ9mFVAkI8o1vzayXNz6z3NlM+zVOsA2oFAHjNxOd4PY8xyz3mL+UilsSJCN0L5vrO+3ud7OEpxUrZcausGiERqgEKQ9sczQ37Tsn1tTsvz11FUtNTUjEjurv73/azQq4T71+bL+fqkOlw989kvYIV6Pj6jkw/TvEyuj6E6Rk2WK4CZJOwypaOjn5ZliuhjYHSoBWtTQBMz9BMPcjIvU3BK3jNpH9hrRzQQMhDHTODnyTMY+RDYmo0y0F8pdChJiFfBQcCU5uWWa6lVEBHA5IEyYUltANpoZgbTmktVJeKLkKcs07q9Pr3X9GqOwcxPMbSOfAEoL8cbhSX1xlwce6YIzjErALEhyq/ojbzHXkFPYomTuBCnhuYdKKD8uq3njzBHV4t+ut422xzE2BwZUDOUF6UMcd0+rY+SqrmZhILzEmvlBiSl1N7n22utha76dA6+M6Kwx3GZ1HIcL+eRnaJzA017vyLySmlHJNFrdDPkwCBS3EwIoGroPbwJWNDFdXNZOQJbz7KujsboXZCFkJzcb0vA0QZ5FrJK0yzae1f0k11HkPt2X7iXphyipwbhRr21NoCFSYhkuv/88nsqQ8Iyu6F+qa2WVMMYxkwsNP/8LaY9I3BYJxsy7SOfn+JOaEjE8vM+6f7Ynw5iacG0jf35fH3U2JtdX7u745/893cWtVbfNrTvzz15t/iIcUCToM/e/n1w11GTU625fIpsy+YE55r7/ypxvDVeEzCKAAAAAElFTkSuQmCC"
+}
+
+Ran `get_digit_metrics`
+Completed with input: {
+  "digit": 3
+}
+
+## Result
+
+The SVHN model predicts the image as:
+
+- Predicted digit: 3
+- Confidence: 99.9998%
+
+## Historical performance for digit 3
+
+For class 3, the model’s historical metrics are:
+
+- Precision: 0.9615384615384616
+- Recall: 0.9166666666666666
+- F1 score: 0.9385665529010239
+- Support: 2400
+
+So the model has strong but not perfect performance on digit 3, with especially high precision and a solid F1 score.

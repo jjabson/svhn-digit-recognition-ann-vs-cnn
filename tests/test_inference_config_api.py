@@ -5,6 +5,8 @@ from src.orchestration.inference_service import (
     OrchestratedInferenceService,
 )
 from src.schemas.orchestration import InferencePolicy
+from config.inference_config import InferenceConfig
+from config.inference_config_service import InferenceConfigService
 
 
 def test_inference_config_endpoint_returns_serving_metadata(
@@ -13,12 +15,16 @@ def test_inference_config_endpoint_returns_serving_metadata(
     class FakePredictor:
         pass
 
+    config_service = InferenceConfigService(
+        InferenceConfig(
+            model_name="test-cnn",
+            confidence_threshold=0.87,
+        )
+    )
+
     service = OrchestratedInferenceService(
         predictor=FakePredictor(),
-        policy=InferencePolicy(
-            confidence_threshold=0.87,
-        ),
-        model_name="test-cnn",
+        config_service=config_service,
     )
 
     monkeypatch.setattr(

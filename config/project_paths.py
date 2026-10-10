@@ -18,3 +18,8 @@ REPORT_OUTPUT = REPORTS_DIR / "svhn_report.pdf"
 REPORT_DATA_FILE = GENERATED_DIR / "report_data.typ"
 
 DATABASE_FILE = GENERATED_DIR / "ml_framework.db"
+
+RUNTIME_STATE_DATABASE_FILE = GENERATED_DIR / "runtime_state.db"
+APPROVAL_CHECKPOINT_DATABASE_FILE = (
+    GENERATED_DIR / "approval_checkpoints.db"
+)

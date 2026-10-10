@@ -1,0 +1,25 @@
+Prompt:
+Use #get_digit_metrics from the svhn MCP server with:
+
+{"digit": 7}
+
+Show me the result.
+Do not read project files or source code.
+Do not use any other tools.
+
+VS Code response:
+Ran `get_digit_metrics`
+Completed with input: {
+  "digit": 7
+}
+
+## SVHN digit metrics for class 7
+
+Result from the SVHN MCP server:
+
+- Class label: 7
+- Precision: 0.9769722814498933
+- Recall: 0.9545833333333333
+- F1 score: 0.9656480505795574
+- Support: 2400
+

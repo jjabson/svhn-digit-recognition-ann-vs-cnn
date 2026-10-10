@@ -1,0 +1,17 @@
+Prompt:
+Use #get_inference_config from the svhn MCP server and show me the result.
+
+Do not read project files or source code.
+Do not use any other tools.
+
+VS Code response:
+Ran `get_inference_config`
+Completed with input: {}
+
+## SVHN inference config
+
+Result from the SVHN MCP server:
+
+- Model name: cnn
+- Confidence threshold: 0.9
+

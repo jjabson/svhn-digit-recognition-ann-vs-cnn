@@ -1,10 +1,20 @@
 import base64
 import binascii
+from uuid import uuid4
+import os
 
 from mcp_server.schemas import PredictionDecisionResult
 from src.orchestration.errors import InvalidInferenceInputError
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from agent.approval_graph import build_approval_graph
+from config.inference_config import DEFAULT_INFERENCE_CONFIG
+from config.inference_config_service import InferenceConfigService
+from langgraph.types import Command
+from config.inference_config_store import InferenceConfigStore
+from config.approval_checkpoint import (
+    create_approval_checkpointer,
+)
 
 from mcp_server.schemas import (
     ClassMetricsResult,
@@ -25,7 +35,44 @@ from tools.evaluation.evaluation_service import (
 
 mcp = MCPServer("svhn-ml-system")
 
-inference_service = create_orchestrated_inference_service()
+RUNTIME_INSTANCE_ID = str(uuid4())
+
+inference_config_store = InferenceConfigStore()
+
+inference_config_service = InferenceConfigService(
+    DEFAULT_INFERENCE_CONFIG,
+    store=inference_config_store,
+)
+
+inference_service = create_orchestrated_inference_service(
+    config_service=inference_config_service,
+)
+
+approval_checkpointer = create_approval_checkpointer()
+
+approval_graph = build_approval_graph(
+    config_service=inference_config_service,
+    checkpointer=approval_checkpointer,
+)
+
+@mcp.tool(
+    name="get_runtime_debug",
+    description=(
+        "Return runtime identity and active configuration details "
+        "for diagnostic verification."
+    ),
+)
+def get_runtime_debug() -> dict:
+    config = inference_config_service.get_config()
+
+    return {
+        "runtime_instance_id": RUNTIME_INSTANCE_ID,
+        "pid": os.getpid(),
+        "config_service_id": id(inference_config_service),
+        "approval_graph_id": id(approval_graph),
+        "approval_checkpointer_id": id(approval_checkpointer),
+        "confidence_threshold": config.confidence_threshold,
+    }
 
 @mcp.tool(
     name="get_inference_config",
@@ -193,6 +240,91 @@ def predict_digit(image_data: str) -> PredictionDecisionResult:
         fallback_reason=decision.fallback_reason,
         review_required=decision.review_required,
     )
+
+@mcp.tool()
+def set_confidence_threshold(
+    confidence_threshold: float,
+) -> dict:
+    """
+    Request a controlled update to the active inference confidence threshold.
+
+    This operation does not change runtime configuration immediately.
+    It starts a human-approval workflow and returns approval context.
+    """
+
+    thread_id = f"threshold-{uuid4()}"
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+        }
+    }
+
+    result = approval_graph.invoke(
+        {
+            "requested_threshold": confidence_threshold,
+            "reason": (
+                "MCP request to change inference confidence threshold"
+            ),
+        },
+        config=config,
+    )
+
+    interrupts = result.get("__interrupt__", [])
+
+    if not interrupts:
+        raise RuntimeError(
+            "Expected approval interrupt was not produced"
+        )
+
+    payload = interrupts[0].value
+
+    return {
+        "status": "approval_required",
+        "thread_id": thread_id,
+        "request_id": payload["request_id"],
+        "action_name": payload["action_name"],
+        "arguments": payload["arguments"],
+        "current_confidence_threshold": (
+            payload["current_confidence_threshold"]
+        ),
+        "message": payload["message"],
+    }
+
+@mcp.tool()
+def resolve_confidence_threshold_approval(
+    thread_id: str,
+    approved: bool,
+    reason: str = "",
+) -> dict:
+    """
+    Resume a pending confidence-threshold approval workflow.
+    """
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+        }
+    }
+
+    result = approval_graph.invoke(
+        Command(
+            resume={
+                "approved": approved,
+                "reason": reason,
+            }
+        ),
+        config=config,
+    )
+
+    return {
+        "status": result["action_status"],
+        "confidence_threshold": (
+            inference_config_service
+            .get_config()
+            .confidence_threshold
+        ),
+    }
 
 
 def main() -> None:

@@ -462,6 +462,130 @@ InferenceDecision
 
 ---
 
+## Independent MCP Consumer Verification
+
+The SVHN project exposes its inference and evaluation capabilities through a Model Context Protocol (MCP) server. To verify that the MCP interface is independent of the project's internal agent implementation, the server was tested with **Claude Code as an external MCP consumer**.
+
+Claude Code connected to the existing local MCP server over `stdio` and dynamically discovered the capabilities exposed by the application. No dependency on the project's LangGraph agent, `AgentState`, or internal orchestration code was required.
+
+### MCP tools discovered
+
+Claude Code independently discovered the following six tools:
+
+- `predict_digit(image_data: str)` — classify an SVHN digit image.
+- `get_model_summary()` — return information about the production model architecture.
+- `get_inference_config()` — return the active model and serving confidence threshold.
+- `get_evaluation_summary()` — return overall evaluation metrics.
+- `get_evaluation_insights()` — return insights derived from model evaluation.
+- `get_digit_metrics(digit: int)` — return per-digit precision, recall, F1 score, and support.
+
+### Verification sequence
+
+The external-consumer verification was performed incrementally.
+
+**1. MCP connection**
+
+Claude Code successfully launched and connected to the local MCP server using `stdio`.
+
+```text
+svhn: python -m mcp_server.server - ✔ Connected
+```
+
+**2. Dynamic tool discovery**
+
+Claude Code queried the MCP server and discovered all six application tools without hard-coded knowledge of their schemas.
+
+**3. Zero-argument tool invocation**
+
+Claude Code successfully called `get_inference_config()` and received structured application data:
+
+```json
+{
+  "model_name": "cnn",
+  "confidence_threshold": 0.9
+}
+```
+
+**4. Parameterized tool invocation**
+
+Claude Code successfully invoked `get_digit_metrics(digit=7)` and received:
+
+```json
+{
+  "class_label": 7,
+  "precision": 0.9769722814498933,
+  "recall": 0.9545833333333333,
+  "f1_score": 0.9656480505795574,
+  "support": 2400
+}
+```
+
+Claude then independently converted these structured metrics into a natural-language explanation.
+
+**5. End-to-end inference and evaluation context**
+
+Claude Code was given a local SVHN sample image:
+
+```text
+sample_images/digit_3_true3.png
+```
+
+The prompt requested that Claude:
+
+1. use the SVHN MCP server to classify the image,
+2. inspect the resulting prediction,
+3. retrieve historical evaluation information for the predicted digit,
+4. explain the result in natural language.
+
+The model predicted digit **3** with approximately **99.9998% model confidence**. The prediction exceeded the configured `0.9` confidence threshold and was accepted without fallback or human review.
+
+Claude then retrieved evaluation metrics for digit 3:
+
+| Metric | Value |
+| --- | ---: |
+| Precision | 96.2% |
+| Recall | 91.7% |
+| F1 score | 93.9% |
+| Support | 2,400 |
+
+Claude combined the prediction result with historical evaluation data to explain how reliably the deployed model recognizes digit 3.
+
+### Architectural result
+
+This verification demonstrates that the SVHN system exposes reusable ML capabilities through an implementation-independent MCP boundary:
+
+```text
+External MCP Consumer
+        │
+        │ MCP / stdio
+        ▼
+SVHN MCP Server
+        │
+        ▼
+Application Services
+        │
+        ├── Production inference
+        ├── Inference configuration
+        └── Evaluation metrics
+```
+
+The external agent is responsible for conversational reasoning and presentation, while the application remains responsible for authoritative model inference, configuration, evaluation data, confidence policy, fallback behavior, and review decisions.
+
+This separation allows different MCP-capable agents to consume the same deterministic ML capabilities without being coupled to a specific LLM provider or agent framework.
+
+### Verification status
+
+- External MCP consumer: **Claude Code**
+- Transport: **stdio**
+- MCP connection: **Passed**
+- Dynamic tool discovery: **Passed**
+- Zero-argument invocation: **Passed**
+- Parameterized invocation: **Passed**
+- Image inference: **Passed**
+- Evaluation-context retrieval: **Passed**
+- Multi-tool natural-language synthesis: **Passed**
+- Dependency on internal LangGraph consumer: **None**
+
 ## Docker
 
 Build the service:
@@ -598,18 +722,22 @@ Several design rules guide the evolution of the project:
 - reliability-observation persistence
 - deterministic failure and fallback reliability evaluation
 
-### Next — MCP Interoperability
+### Completed — MCP Interoperability
 
-The next phase will expose selected inference and evaluation capabilities
-through an MCP interface while keeping orchestration and reliability logic
-independent of agent frameworks.
-
-Planned work includes:
-
-- MCP interface for tool interoperability
+- MCP server exposing inference, model, configuration, and evaluation capabilities
 - typed MCP-facing operations
 - MCP integration testing
-- test agent consuming the MCP interface
+- independent external-consumer verification with Claude Code
+- dynamic tool discovery and invocation over `stdio`
+- end-to-end image inference with evaluation-context retrieval
+
+### Next — Cross-Consumer MCP Verification
+
+- verify the same MCP server with VS Code
+- confirm independent tool discovery
+- confirm parameterized tool invocation
+- confirm end-to-end image inference and contextual evaluation
+- MCP interoperability independently verified with both Claude Code and VS Code/Copilot.
 
 ### Future
 
@@ -619,6 +747,7 @@ After MCP interoperability:
 - inference decision/audit records
 - latency and fallback metrics
 - orchestration observability
+- MCP interoperability with independent external-agent verification using Claude Code.
 
 Future capabilities are intentionally listed as roadmap items rather than
 represented as currently implemented functionality.
@@ -630,27 +759,29 @@ represented as currently implemented functionality.
 This repository demonstrates the progression from:
 
 ```text
+M```text
 Model Training
-      ↓
+    ↓
 Model Evaluation
-      ↓
+    ↓
 Reproducible Evaluation Protocols
-      ↓
+    ↓
 Persistence
-      ↓
+    ↓
 Automated Reporting
-      ↓
+    ↓
 Typed Service Layer
-      ↓
+    ↓
 FastAPI Serving
-      ↓
+    ↓
 Inference Orchestration
-      ↓
+    ↓
 Reliability Engineering
+    ↓
+MCP Interoperability
+    ↓
+Independent Agent Consumption
 ```
-
-The emphasis is on treating machine learning as a software system rather
-than only as a trained model.
 
 ---
 

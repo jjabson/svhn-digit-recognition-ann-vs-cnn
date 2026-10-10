@@ -1,0 +1,35 @@
+Prompt:
+Use the image at ./sample_images/digit_3_true3.png.
+
+Predict the digit in this image using the svhn MCP server, then tell me how the model historically performs on that predicted digit.
+
+Use the MCP tools as needed. Do not rely on the filename as the answer.
+
+Claude code response:
+ Bash(base64 -i ./sample_images/digit_3_true3.png | tr -d '\n')
+  ⎿  iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAACrElEQVR4nBWTx67jVhBEO93AIGrwZmHYS/+ff9sG7IeRKIm8udvgtnAWFVD4VzOP6ZB1cc4JhHHo8Uo0bcv7jIQgvw+Qcd54meUCPOS2Gw1hcqKAKH8CUfocOs/M7NhTz9ytMJFIV0T5A1mO70thQBIvhjEQIiHBMABpCATtPHJ
+     26ubFUR+9tmZ9mFVAkI8o1vzayXNz6z3NlM+zVOsA2oFAHjNxOd4PY8xyz3mL+UilsSJCN0L5vrO+3ud7OEpxUrZcausGiERqgEKQ9sczQ37Tsn1tTsvz11FUtNTUjEjurv73/azQq4T71+bL+fqkOlw989kvYIV6Pj6jkw/TvEyuj6E6Rk2WK4CZJOwypaOjn5ZliuhjYHSoBWtTQBMz9BMPcj
+     IvU3BK3jNpH9hrRzQQMhDHTODnyTMY+RDYmo0y0F8pdChJiFfBQcCU5uWWa6lVEBHA5IEyYUltANpoZgbTmktVJeKLkKcs07q9Pr3X9GqOwcxPMbSOfAEoL8cbhSX1xlwce6YIzjErALEhyq/ojbzHXkFPYomTuBCnhuYdKKD8uq3njzBHV4t+ut422xzE2BwZUDOUF6UMcd0+rY+SqrmZhILzE
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+  Called svhn 2 times (ctrl+o to expand)
+
+⏺ I ran the request again and the result is the same as last time: the model predicted 3 with about 99.9998% confidence. That clears the 0.9 threshold, so the CNN's prediction was accepted without needing a fallback model or
+  human review.
+
+  How the model has done on 3 in the evaluation (2,400 images)
+
+  ┌───────────┬───────┐
+  │  Metric   │ Value │
+  ├───────────┼───────┤
+  │ Precision │ 96.2% │
+  ├───────────┼───────┤
+  │ Recall    │ 91.7% │
+  ├───────────┼───────┤
+  │ F1 score  │ 93.9% │
+  └───────────┴───────┘
+
+  - This prediction is very likely correct. When the model says "3", it has been right 96.2% of the time, and this image scored near-certain confidence.
+  - 3 is still the model's weakest digit. It has the lowest F1 of all ten digits, because about 8% of real 3s get labeled as something else. Most often they're read as 5 (73 times).
+  - That weakness doesn't apply here. The usual failure is missing a real 3, and this image was recognized as a 3

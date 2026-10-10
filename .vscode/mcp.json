@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "svhn": {
+      "type": "stdio",
+      "command": "/Users/jblaze/PycharmProjects/PythonProject/.venv/bin/python",
+      "args": [
+        "-m",
+        "mcp_server.server"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

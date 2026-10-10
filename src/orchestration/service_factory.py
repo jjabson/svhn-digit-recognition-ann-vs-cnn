@@ -2,27 +2,31 @@ from config.inference_config import (
     DEFAULT_INFERENCE_CONFIG,
     InferenceConfig,
 )
+from config.inference_config_service import InferenceConfigService
 
 from src.inference import SVHNPredictor
-from src.orchestration.inference_service import OrchestratedInferenceService
-from src.schemas.orchestration import InferencePolicy
+from src.orchestration.inference_service import (
+    OrchestratedInferenceService,
+)
 
 
 def create_orchestrated_inference_service(
     config: InferenceConfig = DEFAULT_INFERENCE_CONFIG,
+    config_service: InferenceConfigService | None = None,
 ) -> OrchestratedInferenceService:
     """
     Create an inference service using the supplied
     orchestration configuration.
+
+    A shared InferenceConfigService may be injected so runtime
+    configuration updates are observed by the inference service.
     """
     predictor = SVHNPredictor()
 
-    policy = InferencePolicy(
-        confidence_threshold=config.confidence_threshold,
-    )
+    if config_service is None:
+        config_service = InferenceConfigService(config)
 
     return OrchestratedInferenceService(
         predictor=predictor,
-        policy=policy,
-        model_name=config.model_name,
+        config_service=config_service,
     )

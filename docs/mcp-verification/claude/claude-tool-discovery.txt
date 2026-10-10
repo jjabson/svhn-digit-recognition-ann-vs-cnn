@@ -1,0 +1,23 @@
+Prompt:
+List the tools exposed by the svhn MCP server. Do not call any of them yet.
+
+Claude code output:
+ The svhn server exposes six tools:
+
+  ┌─────────────────────────┬──────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │          Tool           │        Arguments         │                                              Purpose                                               │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ predict_digit           │ image_data: str (base64) │ Classifies an SVHN-style digit image using the production inference service                        │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ get_digit_metrics       │ digit: int               │ Returns precision, recall, F1 and support for one digit in the primary evaluation                  │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ get_evaluation_summary  │ none                     │ Returns summary metrics for the primary model evaluation                                           │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ get_evaluation_insights │ none                     │ Returns derived insights: best and worst digit, and the most common misclassification              │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ get_inference_config    │ none                     │ Returns the active serving configuration (currently the cnn model with a 0.9 confidence threshold) │
+  ├─────────────────────────┼──────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ get_model_summary       │ none                     │ Returns an architecture summary of the model currently used for inference                          │
+  └─────────────────────────┴──────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  I haven't called any tools this turn.

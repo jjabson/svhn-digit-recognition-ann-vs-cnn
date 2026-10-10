@@ -1,0 +1,10 @@
+Prompt:
+None
+
+VS Code output:
+2026-10-02 11:35:17.558 [info] Starting server svhn
+2026-10-02 11:35:17.558 [info] Connection state: Starting
+2026-10-02 11:35:17.558 [info] Starting server from LocalProcess extension host
+2026-10-02 11:35:17.560 [info] Connection state: Starting
+2026-10-02 11:35:17.561 [info] Connection state: Running
+2026-10-02 11:35:21.048 [info] Discovered 6 tools

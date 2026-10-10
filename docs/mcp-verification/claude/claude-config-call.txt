@@ -1,0 +1,12 @@
+Prompt:
+  Call the get_inference_config tool from the svhn MCP server and show me the result. Do not call any other tools.
+
+ Claude Code output:
+ The get_inference_config tool returned:
+
+  {
+    "model_name": "cnn",
+    "confidence_threshold": 0.9
+  }
+
+  The serving system is using the CNN model, and its confidence threshold is set to 0.9.

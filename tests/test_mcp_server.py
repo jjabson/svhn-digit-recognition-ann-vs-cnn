@@ -62,6 +62,9 @@ def test_mcp_tool_discovery() -> None:
         "get_digit_metrics",
         "get_model_summary",
         "predict_digit",
+        "set_confidence_threshold",
+        "resolve_confidence_threshold_approval",
+        "get_runtime_debug",
     }
 
     digit_metrics = tools_by_name["get_digit_metrics"]
@@ -108,10 +111,11 @@ def test_mcp_read_only_tools() -> None:
         )
 
         assert result.is_error is False
-        assert result.structured_content == {
-            "model_name": "cnn",
-            "confidence_threshold": 0.9,
-        }
+        assert result.structured_content["model_name"] == "cnn"
+
+        threshold = result.structured_content["confidence_threshold"]
+
+        assert 0.0 <= threshold <= 1.0
 
         evaluation_result = await session.call_tool(
             "get_evaluation_summary",
