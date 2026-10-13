@@ -6,11 +6,13 @@ House Numbers (SVHN) digit recognition.
 The project began as an ANN-vs-CNN computer vision study and evolved into a
 production-oriented ML system with reproducible evaluation, persisted metrics,
 automated technical reporting, typed inference contracts, FastAPI serving,
-Docker containerization, and policy-driven inference orchestration.
+Model Context Protocol (MCP) interoperability, policy-driven inference
+orchestration, durable runtime state, and human-in-the-loop controlled actions.
 
 The goal is no longer only to train an accurate classifier. The repository
 demonstrates how a trained ML model can be evaluated, packaged, served,
-observed, and integrated into a maintainable software architecture.
+observed, exposed to independent AI agents, and operated through maintainable
+and controlled software architecture.
 
 ---
 
@@ -20,8 +22,17 @@ observed, and integrated into a maintainable software architecture.
   holdout containing 24,000 samples.
 - Improved from **67.36% ANN baseline → 74.84% improved ANN → 95.14% CNN**.
 - FastAPI/Uvicorn inference and evaluation API.
+- Model Context Protocol (MCP) server exposing reusable ML-system capabilities.
+- Independent MCP interoperability verified with **Claude Code** and
+  **VS Code/Copilot**.
 - Policy-driven inference orchestration with `ACCEPTED`, `UNCERTAIN`,
   and `FAILED` outcomes.
+- Application-owned action authorization with `READ_ONLY`, `CONTROLLED`,
+  and `PROHIBITED` risk classes.
+- Human-in-the-loop approval workflow for controlled runtime changes using
+  LangGraph interrupt/resume semantics.
+- Durable runtime configuration persistence using SQLite.
+- Durable LangGraph approval/checkpoint persistence across MCP process restarts.
 - Typed Python domain models using dataclasses and Pydantic API contracts.
 - SQLite-backed persisted evaluation and per-prediction reliability observations.
 - Confidence, threshold, selective-risk, and calibration analysis.
@@ -29,48 +40,85 @@ observed, and integrated into a maintainable software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **84 automated tests** covering preprocessing, inference, orchestration,
-  reliability analysis, persistence, configuration, API behavior, and
-  real-model integration.
+- **222 automated tests** covering preprocessing, inference, orchestration,
+  reliability, MCP interoperability, controlled actions, HITL approval,
+  persistence, restart recovery, API behavior, and real-model integration.
 
 ---
 
 ## System Architecture
 
 ```text
-                         Clients
-                            │
-                            ▼
-                     ┌─────────────┐
-                     │   FastAPI   │
-                     │   /docs     │
-                     └──────┬──────┘
-                            │
-              ┌─────────────┴─────────────┐
-              │                           │
-              ▼                           ▼
-     Inference Orchestration       Evaluation API
-              │                           │
-      ┌───────┴────────┐                  ▼
-      │                │          Evaluation Service
-      ▼                ▼                  │
-Inference Policy   Runtime Config         ▼
-      │                            SQLite Evaluation
-      ▼                                 Store
- SVHN Predictor                           │
-      │                                   │
-      ▼                                   ▼
-Image Preprocessing              Metrics / Insights
-      │                                   │
-      ▼                                   ▼
-TensorFlow CNN                    Report Generation
-                                          │
-                                          ▼
-                                      Typst / PDF
+                         External Consumers
+                  ┌──────────────┴──────────────┐
+                  │                             │
+                  ▼                             ▼
+             FastAPI Clients              MCP Consumers
+                  │                             │
+                  ▼                    ┌────────┴────────┐
+             FastAPI API               │                 │
+                  │                    ▼                 ▼
+                  │              Claude Code      VS Code/Copilot
+                  │                    │                 │
+                  │                    └────────┬────────┘
+                  │                             │
+                  │                             ▼
+                  │                      ┌─────────────┐
+                  │                      │ MCP Server  │
+                  │                      └──────┬──────┘
+                  │                             │
+                  └──────────────┬──────────────┘
+                                 │
+             ┌───────────────────┼───────────────────┐
+             │                   │                   │
+             ▼                   ▼                   ▼
+      Inference Service   Evaluation Service   Controlled Actions
+             │                   │                   │
+             │                   │                   ▼
+             │                   │              ActionPolicy
+             │                   │                   │
+             │                   │                   ▼
+             │                   │        ControlledActionExecutor
+             │                   │                   │
+             │                   │                   ▼
+             │                   │            LangGraph HITL
+             │                   │           interrupt / resume
+             │                   │                   │
+             ▼                   ▼                   ▼
+      Runtime Config       Evaluation SQLite   Approval Checkpoints
+             │                                      SQLite
+             ▼
+      runtime_state.db
+             │
+             ▼
+      Inference Policy
+             │
+             ▼
+       SVHN Predictor
+             │
+             ▼
+     Image Preprocessing
+             │
+             ▼
+       TensorFlow CNN
 ```
 
-The architecture deliberately separates model execution, orchestration
-decisions, persistence, API contracts, evaluation logic, and presentation.
+The architecture deliberately separates:
+- model execution;
+- inference and fallback policy;
+- runtime configuration;
+- evaluation and reliability persistence;
+- external API and MCP contracts;
+- action authorization;
+- human approval workflow state;
+- durable operational state.
+
+FastAPI and MCP are external adapters over application services rather than
+owners of model, inference, or authorization policy.
+
+LangGraph owns pause/resume workflow mechanics for controlled actions, while
+application code remains authoritative for risk classification, approval
+validation, and controlled execution.
 
 ---
 
@@ -147,14 +195,19 @@ The orchestration policy currently supports three final states:
   threshold and requires review.
 - `FAILED` — model execution did not produce a usable prediction.
 
-The current confidence threshold is **0.90**. Reliability analysis on the
-authoritative 24,000-sample Historical Stratified Holdout shows that this
-operating point provides **91.38% coverage**, **98.44% accepted accuracy**,
+The baseline evaluated confidence threshold is **0.90**. Reliability analysis
+on the authoritative 24,000-sample Historical Stratified Holdout shows that
+this operating point provides **91.38% coverage**, **98.44% accepted accuracy**,
 **1.56% selective risk**, and an **8.62% uncertainty rate**.
 
-The 0.90 threshold remains an evaluated operating point rather than a claimed
-globally optimal production threshold. Final threshold selection depends on
-the reliability, risk, and review-cost requirements of the serving environment.
+The `0.90` value is the project's validated bootstrap/default operating point,
+not a permanently fixed runtime value. The active serving threshold may be
+changed through the controlled human-in-the-loop workflow and is persisted
+across MCP process restarts.
+
+Threshold selection remains an operational policy decision rather than a
+claim of a globally optimal value. Final selection depends on reliability,
+risk, coverage, and review-cost requirements of the serving environment.
 
 ---
 
@@ -187,21 +240,144 @@ model failure.
 
 ## Runtime Configuration
 
-Inference behavior is represented by a typed, immutable configuration
-object.
+Inference behavior is represented by a typed, immutable `InferenceConfig`
+domain object.
 
-Current defaults:
+Bootstrap defaults:
 
 ```text
 model_name            = cnn
 confidence_threshold  = 0.90
 ```
 
-Configuration is validated when constructed so invalid operating values
-fail early rather than leaking into runtime inference behavior.
+Configuration is validated when constructed so invalid operating values fail
+early rather than leaking into runtime inference behavior.
 
-The service factory also accepts injected configuration, allowing different
-runtime policies without modifying orchestration code or global state.
+Runtime configuration is managed through `InferenceConfigService`. The service
+loads persisted configuration when available and falls back to
+`DEFAULT_INFERENCE_CONFIG` only when no durable runtime state exists.
+
+```text
+Process startup
+      │
+      ▼
+InferenceConfigStore
+      │
+      ├── persisted config exists ───► restore persisted value
+      │
+      └── no persisted config ───────► use default 0.90
+```
+
+Approved configuration changes are persisted to:
+
+```text
+generated/runtime_state.db
+```
+
+The write ordering is intentionally:
+
+```text
+validate new configuration
+        ↓
+persist new configuration
+        ↓
+replace active in-memory configuration
+```
+
+This ensures that a persistence failure does not silently replace the active
+runtime state.
+
+Process-restart verification confirmed that an approved threshold change
+survives termination of the MCP Python process and is restored by the newly
+created runtime.
+
+---
+
+## Human-in-the-Loop Controlled Actions
+
+Runtime mutation is governed by deterministic application-owned authorization
+rather than by the LLM, MCP client, or LangGraph itself.
+
+Actions are classified into three risk levels:
+
+| Risk | Meaning |
+|---|---|
+| `READ_ONLY` | May execute without human approval |
+| `CONTROLLED` | Requires explicit approval before execution |
+| `PROHIBITED` | Must not execute |
+
+Current controlled action:
+
+```text
+set_confidence_threshold
+```
+
+The workflow is:
+
+```text
+MCP controlled-action request
+        │
+        ▼
+ActionPolicy
+        │
+        ▼
+ApprovalRequest
+        │
+        ▼
+LangGraph interrupt()
+        │
+        ▼
+Human approval required
+        │
+        ├── rejected ─────────────► no configuration change
+        │
+        └── approved
+                │
+                ▼
+        ControlledActionExecutor
+                │
+                ▼
+        exact request/decision validation
+                │
+                ▼
+        InferenceConfigService
+                │
+                ▼
+        persistent runtime update
+```
+
+Approval is bound to the exact action and exact arguments originally requested.
+A decision for one request cannot authorize a different controlled action or
+different argument set.
+
+Approval workflow state is persisted through LangGraph's SQLite checkpointer:
+
+```text
+generated/approval_checkpoints.db
+```
+
+This allows a pending approval to survive MCP process termination.
+
+The restart-recovery path was verified end to end:
+
+```text
+request threshold change
+        ↓
+approval_required
+        ↓
+process terminates before approval
+        ↓
+new MCP runtime starts
+        ↓
+original thread_id resumes
+        ↓
+approval executes
+        ↓
+new configuration persists
+```
+
+LangGraph is responsible for durable pause/resume workflow state. Application
+code remains responsible for authorization rules and controlled execution.
 
 ---
 
@@ -316,7 +492,7 @@ The authoritative 24,000-sample Historical Stratified Holdout produced:
 High confidence does not guarantee correctness. The evaluation identified
 **148 incorrect predictions with confidence >= 0.99**.
 
-At the current **0.90** orchestration threshold:
+At the baseline evaluated **0.90** orchestration threshold:
 
 | Metric | Result |
 |---|---:|
@@ -397,6 +573,7 @@ Run the controlled analysis with:
 
 ```bash
 python -m tools.reliability.run_failure_analysis
+```
 
 ---
 
@@ -411,34 +588,42 @@ python -m pytest -v
 Current milestone:
 
 ```text
-84 passed, 1 warning
+222 passed
 ```
 
 Coverage includes:
 
-- image preprocessing
-- typed prediction results
-- generic model execution
-- inference adapters
-- confidence policy behavior
-- threshold boundaries
-- primary/fallback orchestration behavior
-- invalid-input propagation
-- runtime configuration validation
-- service-factory configuration injection
-- FastAPI response contracts
-- HTTP failure semantics
-- serving metadata
-- real saved-CNN integration
-- confidence-versus-correctness analysis
-- confidence-threshold and selective-risk evaluation
-- calibration analysis
-- SQLite reliability-observation persistence
-- deterministic failure injection
-- fallback recovery and review escalation
-
-The remaining warning is a known FastAPI/Starlette `TestClient` dependency
-deprecation warning and does not affect current test correctness.
+- image preprocessing;
+- typed prediction results;
+- generic model execution;
+- inference adapters;
+- confidence policy behavior;
+- threshold boundaries;
+- primary/fallback orchestration behavior;
+- invalid-input propagation;
+- runtime configuration validation;
+- FastAPI response contracts;
+- HTTP failure semantics;
+- serving metadata;
+- real saved-CNN integration;
+- confidence-versus-correctness analysis;
+- confidence-threshold and selective-risk evaluation;
+- calibration analysis;
+- SQLite reliability-observation persistence;
+- deterministic failure injection;
+- fallback recovery and review escalation;
+- MCP tool discovery and invocation;
+- independent MCP consumer interoperability;
+- action risk classification;
+- immutable approval request/decision contracts;
+- controlled action execution;
+- approval mismatch and rejection behavior;
+- LangGraph interrupt/resume behavior;
+- persistent runtime configuration;
+- durable LangGraph checkpoint recovery;
+- graph reconstruction from persisted approval state;
+- process-restart configuration recovery;
+- process-restart pending-approval recovery.
 
 A real-model integration test exercises the path:
 
@@ -459,100 +644,129 @@ orchestration
     ↓
 InferenceDecision
 ```
+The persistence test suite additionally verifies:
 
+```text
+approved runtime update
+    ↓
+SQLite persistence
+    ↓
+Python process replacement
+    ↓
+runtime reconstruction
+    ↓
+same active configuration
+```
+
+and 
+
+```text
+pending HITL approval
+    ↓
+SQLite checkpoint
+    ↓
+Python process replacement
+    ↓
+same thread_id
+    ↓
+workflow resume
+    ↓
+controlled execution
+```
 ---
 
 ## Independent MCP Consumer Verification
 
-The SVHN project exposes its inference and evaluation capabilities through a Model Context Protocol (MCP) server. To verify that the MCP interface is independent of the project's internal agent implementation, the server was tested with **Claude Code as an external MCP consumer**.
+The SVHN platform exposes inference, evaluation, runtime configuration, and
+controlled-action capabilities through a Model Context Protocol (MCP) server.
 
-Claude Code connected to the existing local MCP server over `stdio` and dynamically discovered the capabilities exposed by the application. No dependency on the project's LangGraph agent, `AgentState`, or internal orchestration code was required.
+The interface was independently verified with:
 
-### MCP tools discovered
+- **Claude Code**
+- **VS Code / Copilot Agent**
 
-Claude Code independently discovered the following six tools:
+Both consumers connected to the same local MCP server over `stdio` without
+depending on the project's internal LangGraph agent implementation.
 
-- `predict_digit(image_data: str)` — classify an SVHN digit image.
-- `get_model_summary()` — return information about the production model architecture.
-- `get_inference_config()` — return the active model and serving confidence threshold.
-- `get_evaluation_summary()` — return overall evaluation metrics.
-- `get_evaluation_insights()` — return insights derived from model evaluation.
-- `get_digit_metrics(digit: int)` — return per-digit precision, recall, F1 score, and support.
+### MCP tools
 
-### Verification sequence
+The server currently exposes nine tools:
 
-The external-consumer verification was performed incrementally.
+| Tool | Purpose |
+|---|---|
+| `predict_digit(image_data)` | Classify an SVHN digit image |
+| `get_model_summary()` | Inspect production CNN architecture |
+| `get_inference_config()` | Read active inference configuration |
+| `get_evaluation_summary()` | Retrieve aggregate evaluation metrics |
+| `get_evaluation_insights()` | Retrieve derived evaluation insights |
+| `get_digit_metrics(digit)` | Retrieve per-digit metrics |
+| `set_confidence_threshold(value)` | Request a controlled threshold change |
+| `resolve_confidence_threshold_approval(...)` | Resume a pending approval workflow |
+| `get_runtime_debug()` | Inspect runtime identity/state for diagnostics |
 
-**1. MCP connection**
+### Read-only interoperability
 
-Claude Code successfully launched and connected to the local MCP server using `stdio`.
+External consumers independently verified:
 
-```text
-svhn: python -m mcp_server.server - ✔ Connected
-```
+- MCP connection over `stdio`;
+- dynamic capability discovery;
+- zero-argument tool invocation;
+- parameterized tool invocation;
+- structured result handling;
+- image inference;
+- historical per-class evaluation retrieval;
+- multi-tool reasoning and natural-language synthesis.
 
-**2. Dynamic tool discovery**
-
-Claude Code queried the MCP server and discovered all six application tools without hard-coded knowledge of their schemas.
-
-**3. Zero-argument tool invocation**
-
-Claude Code successfully called `get_inference_config()` and received structured application data:
-
-```json
-{
-  "model_name": "cnn",
-  "confidence_threshold": 0.9
-}
-```
-
-**4. Parameterized tool invocation**
-
-Claude Code successfully invoked `get_digit_metrics(digit=7)` and received:
-
-```json
-{
-  "class_label": 7,
-  "precision": 0.9769722814498933,
-  "recall": 0.9545833333333333,
-  "f1_score": 0.9656480505795574,
-  "support": 2400
-}
-```
-
-Claude then independently converted these structured metrics into a natural-language explanation.
-
-**5. End-to-end inference and evaluation context**
-
-Claude Code was given a local SVHN sample image:
+Example end-to-end workflow:
 
 ```text
-sample_images/digit_3_true3.png
+sample image
+    ↓
+predict_digit
+    ↓
+predicted class
+    ↓
+get_digit_metrics
+    ↓
+historical performance context
+    ↓
+external-agent explanation
 ```
 
-The prompt requested that Claude:
+### Controlled-action interoperability
 
-1. use the SVHN MCP server to classify the image,
-2. inspect the resulting prediction,
-3. retrieve historical evaluation information for the predicted digit,
-4. explain the result in natural language.
+VS Code/Copilot additionally verified the controlled-action workflow:
 
-The model predicted digit **3** with approximately **99.9998% model confidence**. The prediction exceeded the configured `0.9` confidence threshold and was accepted without fallback or human review.
+```text
+set_confidence_threshold
+        ↓
+approval_required
+        ↓
+human approval
+        ↓
+resolve_confidence_threshold_approval
+        ↓
+configuration updated
+```
 
-Claude then retrieved evaluation metrics for digit 3:
+The MCP client may present the approval requirement through its own user
+interface, but the controlled action itself remains governed by application
+authorization and LangGraph workflow state.
 
-| Metric | Value |
-| --- | ---: |
-| Precision | 96.2% |
-| Recall | 91.7% |
-| F1 score | 93.9% |
-| Support | 2,400 |
+### Process-restart recovery
 
-Claude combined the prediction result with historical evaluation data to explain how reliably the deployed model recognizes digit 3.
+Durable workflow behavior was independently verified by terminating the MCP
+Python process while a controlled action was awaiting approval.
+
+After a new MCP runtime was created:
+
+- persisted inference configuration was restored;
+- the original approval `thread_id` remained resumable;
+- the pre-crash approval request was recovered from SQLite;
+- the controlled action executed successfully after approval;
+- the updated threshold was persisted for subsequent runtimes.
 
 ### Architectural result
-
-This verification demonstrates that the SVHN system exposes reusable ML capabilities through an implementation-independent MCP boundary:
 
 ```text
 External MCP Consumer
@@ -561,30 +775,50 @@ External MCP Consumer
         ▼
 SVHN MCP Server
         │
-        ▼
-Application Services
+        ├── Read-only capabilities
         │
-        ├── Production inference
-        ├── Inference configuration
-        └── Evaluation metrics
+        └── Controlled capabilities
+                    │
+                    ▼
+             Application Policy
+                    │
+                    ▼
+             LangGraph HITL
+                    │
+                    ▼
+            Durable Checkpoint
 ```
 
-The external agent is responsible for conversational reasoning and presentation, while the application remains responsible for authoritative model inference, configuration, evaluation data, confidence policy, fallback behavior, and review decisions.
+External agents own conversational reasoning and capability selection.
 
-This separation allows different MCP-capable agents to consume the same deterministic ML capabilities without being coupled to a specific LLM provider or agent framework.
+The application remains authoritative for:
+
+- model inference;
+- configuration validation;
+- confidence policy;
+- fallback behavior;
+- evaluation facts;
+- risk classification;
+- authorization;
+- controlled action execution.
 
 ### Verification status
 
-- External MCP consumer: **Claude Code**
-- Transport: **stdio**
-- MCP connection: **Passed**
-- Dynamic tool discovery: **Passed**
-- Zero-argument invocation: **Passed**
-- Parameterized invocation: **Passed**
-- Image inference: **Passed**
-- Evaluation-context retrieval: **Passed**
-- Multi-tool natural-language synthesis: **Passed**
-- Dependency on internal LangGraph consumer: **None**
+| Capability | Claude Code | VS Code / Copilot |
+|---|---:|---:|
+| MCP connection | Passed | Passed |
+| Dynamic tool discovery | Passed | Passed |
+| Zero-argument invocation | Passed | Passed |
+| Parameterized invocation | Passed | Passed |
+| Image inference | Passed | Passed |
+| Evaluation-context retrieval | Passed | Passed |
+| Multi-tool synthesis | Passed | Passed |
+| Controlled threshold workflow | — | Passed |
+| Human approval / resume | — | Passed |
+| Process-restart recovery | — | Passed |
+| Dependency on internal agent | None | None |
+
+---
 
 ## Docker
 
@@ -609,39 +843,73 @@ The container launches the FastAPI application through Uvicorn on port
 
 ```text
 .
+├── agent/
+│   ├── approval_graph.py             # HITL controlled-action workflow
+│   ├── graph.py                      # Agent workflow construction
+│   ├── nodes.py                      # Agent nodes
+│   └── state.py                      # Agent state contracts
+│
 ├── api/
-│   └── app.py                 # FastAPI application
+│   └── app.py                        # FastAPI application
 │
 ├── config/
-│   ├── inference_config.py    # Runtime inference behavior
-│   └── project_paths.py       # Canonical project paths
+│   ├── inference_config.py           # Typed inference configuration
+│   ├── inference_config_service.py   # Active runtime configuration service
+│   ├── inference_config_store.py     # Persistent runtime config store
+│   ├── approval_checkpoint.py        # Durable LangGraph checkpointer
+│   └── project_paths.py              # Canonical project paths
+│
+├── mcp_server/
+│   ├── server.py                     # MCP capability interface
+│   └── schemas.py                    # MCP result contracts
 │
 ├── src/
-│   ├── inference.py           # SVHN CNN predictor
-│   ├── preprocessing.py       # Image preprocessing
-│   ├── orchestration/         # Execution, adapters, policy, services
-│   └── schemas/               # Typed domain/API contracts
+│   ├── inference.py                  # SVHN CNN predictor
+│   ├── preprocessing.py              # Image preprocessing
+│   ├── orchestration/
+│   │   ├── action_policy.py          # Action risk classification
+│   │   ├── approval.py               # Approval domain contracts
+│   │   ├── controlled_executor.py    # Authorized controlled execution
+│   │   ├── inference_service.py      # Runtime inference service
+│   │   └── ...
+│   └── schemas/                      # Typed application/API contracts
 │
 ├── tools/
-│   ├── evaluation/            # Evaluation persistence & services
-│   ├── reliability/           # Confidence, calibration & failure analysis
-│   ├── figures/               # Automated figure generation
-│   └── model/                 # Model inspection
+│   ├── approval/                     # HITL verification utilities
+│   ├── evaluation/                   # Evaluation persistence & services
+│   ├── reliability/                  # Confidence, calibration & failure analysis
+│   ├── figures/                      # Automated figure generation
+│   └── model/                        # Model inspection
 │
-├── tests/                     # Automated test suite
-├── reports/                   # Typst report source/output
-├── figures/                   # Generated report figures
-├── artifacts/                 # Evaluation/model artifacts
-├── models/                    # Saved CNN
-├── sample_images/             # Integration-test/sample inputs
-├── notebooks/                 # Original modeling work
-├── generated/                 # Generated runtime/report artifacts
+├── docs/
+│   └── mcp-verification/
+│       ├── claude/                   # Claude Code interoperability evidence
+│       └── vscode/                   # VS Code/Copilot interoperability evidence
+│
+├── tests/                            # Automated regression suite
+├── reports/                          # Typst report source/output
+├── figures/                          # Generated report figures
+├── artifacts/                        # Evaluation/model artifacts
+├── models/                           # Saved CNN
+├── sample_images/                    # Integration-test/sample inputs
+├── notebooks/                        # Original modeling work
+├── generated/                        # Generated runtime/report artifacts
 │
 ├── Dockerfile
 ├── requirements.txt
 ├── CHANGELOG.md
 └── README.md
 ```
+Persistent generated databases include:
+
+```text
+generated/ml_framework.db
+generated/runtime_state.db
+generated/approval_checkpoints.db
+```
+
+Runtime-state databases are generated artifacts and are not committed as
+source-controlled application state.
 
 ---
 
@@ -680,12 +948,21 @@ Several design rules guide the evolution of the project:
 - scikit-learn
 - h5py
 
-**Serving & Application**
+**Serving & Interoperability**
 
 - FastAPI
 - Uvicorn
 - Pydantic
+- Model Context Protocol (MCP)
+- stdio MCP transport
 - Pillow
+
+**Agent & Human-in-the-Loop**
+
+- LangGraph
+- interrupt / resume workflows
+- durable LangGraph SQLite checkpoints
+- application-owned action authorization
 
 **ML Engineering**
 
@@ -693,6 +970,8 @@ Several design rules guide the evolution of the project:
 - SQLite
 - pytest
 - Docker
+- persistent runtime configuration
+- reliability and fallback evaluation
 
 **Reporting**
 
@@ -704,7 +983,7 @@ Several design rules guide the evolution of the project:
 
 ## Roadmap
 
-### Completed
+### Completed — Model & Reliability Engineering
 
 - ANN/CNN model development and comparison
 - reproducible model evaluation
@@ -722,32 +1001,50 @@ Several design rules guide the evolution of the project:
 - reliability-observation persistence
 - deterministic failure and fallback reliability evaluation
 
-### Completed — MCP Interoperability
+### Completed — MCP & Agent Interoperability
 
 - MCP server exposing inference, model, configuration, and evaluation capabilities
 - typed MCP-facing operations
 - MCP integration testing
 - independent external-consumer verification with Claude Code
-- dynamic tool discovery and invocation over `stdio`
+- independent external-consumer verification with VS Code/Copilot
+- dynamic MCP tool discovery over `stdio`
+- parameterized MCP tool invocation
 - end-to-end image inference with evaluation-context retrieval
+- multi-tool external-agent reasoning
 
-### Next — Cross-Consumer MCP Verification
+### Completed — Controlled Human-in-the-Loop Actions
 
-- verify the same MCP server with VS Code
-- confirm independent tool discovery
-- confirm parameterized tool invocation
-- confirm end-to-end image inference and contextual evaluation
-- MCP interoperability independently verified with both Claude Code and VS Code/Copilot.
+- application-owned action risk classification
+- `READ_ONLY`, `CONTROLLED`, and `PROHIBITED` action policy
+- immutable approval request and decision contracts
+- exact action/argument approval matching
+- centralized controlled-action executor
+- controlled confidence-threshold mutation
+- LangGraph interrupt/resume approval workflow
+- MCP-controlled action integration
+- approval and rejection verification
+- persistent inference runtime configuration
+- persistent LangGraph approval checkpoints
+- recovery of runtime configuration after Python-process restart
+- recovery and resume of pending approval workflows after process restart
+
+### Next — Trusted Human Approval Enforcement
+
+- strengthen the trust boundary around approval resolution
+- prevent autonomous MCP consumers from self-authorizing controlled actions
+- distinguish trusted human approval events from agent-generated approval claims
+- preserve application-owned authorization independent of client UI behavior
 
 ### Future
 
-After MCP interoperability:
-
-- demonstration agent
+- durable approval/audit event history
 - inference decision/audit records
 - latency and fallback metrics
 - orchestration observability
-- MCP interoperability with independent external-agent verification using Claude Code.
+- additional controlled runtime actions
+- stronger multi-process/runtime coordination
+- production-grade authentication and authorization boundaries
 
 Future capabilities are intentionally listed as roadmap items rather than
 represented as currently implemented functionality.
@@ -759,14 +1056,13 @@ represented as currently implemented functionality.
 This repository demonstrates the progression from:
 
 ```text
-M```text
 Model Training
     ↓
 Model Evaluation
     ↓
 Reproducible Evaluation Protocols
     ↓
-Persistence
+Evaluation Persistence
     ↓
 Automated Reporting
     ↓
@@ -781,7 +1077,20 @@ Reliability Engineering
 MCP Interoperability
     ↓
 Independent Agent Consumption
+    ↓
+Application-Owned Action Policy
+    ↓
+Human-in-the-Loop Control
+    ↓
+Durable Runtime Configuration
+    ↓
+Persistent Workflow Checkpoints
+    ↓
+Process-Restart Recovery
 ```
+The project therefore extends beyond model training into serving,
+interoperability, reliability, controlled automation, and durable
+human-in-the-loop ML-system operation.
 
 ---
 
