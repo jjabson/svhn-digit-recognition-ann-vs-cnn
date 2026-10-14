@@ -10,7 +10,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from agent.approval_graph import build_approval_graph
 from config.inference_config import DEFAULT_INFERENCE_CONFIG
 from config.inference_config_service import InferenceConfigService
-from langgraph.types import Command
 from config.inference_config_store import InferenceConfigStore
 from config.approval_checkpoint import (
     create_approval_checkpointer,
@@ -32,6 +31,15 @@ from tools.evaluation.evaluation_service import (
     get_evaluation_insights,
     get_primary_evaluation,
 )
+from config.approval_artifact_store import (
+    ApprovalArtifactStore,
+)
+from src.orchestration.trusted_approval import (
+    TrustedApprovalVerifier,
+)
+from src.orchestration.trusted_approval_service import (
+    DEFAULT_TRUSTED_APPROVAL_ISSUER,
+)
 
 mcp = MCPServer("svhn-ml-system")
 
@@ -50,8 +58,19 @@ inference_service = create_orchestrated_inference_service(
 
 approval_checkpointer = create_approval_checkpointer()
 
+approval_artifact_store = ApprovalArtifactStore()
+
+trusted_approval_verifier = TrustedApprovalVerifier(
+    approval_artifact_store,
+    trusted_issuers={
+        DEFAULT_TRUSTED_APPROVAL_ISSUER,
+    },
+)
+
 approval_graph = build_approval_graph(
     config_service=inference_config_service,
+    artifact_store=approval_artifact_store,
+    trusted_approval_verifier=trusted_approval_verifier,
     checkpointer=approval_checkpointer,
 )
 
@@ -292,13 +311,14 @@ def set_confidence_threshold(
     }
 
 @mcp.tool()
-def resolve_confidence_threshold_approval(
+def get_confidence_threshold_approval_status(
     thread_id: str,
-    approved: bool,
-    reason: str = "",
 ) -> dict:
     """
-    Resume a pending confidence-threshold approval workflow.
+    Inspect a confidence-threshold approval workflow.
+
+    This tool is read-only. It cannot approve, reject,
+    resume, or authorize controlled execution.
     """
 
     config = {
@@ -307,18 +327,63 @@ def resolve_confidence_threshold_approval(
         }
     }
 
-    result = approval_graph.invoke(
-        Command(
-            resume={
-                "approved": approved,
-                "reason": reason,
-            }
-        ),
-        config=config,
+    snapshot = approval_graph.get_state(
+        config
     )
 
+    state = snapshot.values
+
+    if (
+        not state
+        or "approval_request" not in state
+    ):
+        raise ToolError(
+            "No confidence-threshold approval "
+            f"workflow found for thread_id "
+            f"{thread_id}."
+        )
+
+    request_data = state["approval_request"]
+
+    request_id = (
+        request_data["request_id"]
+    )
+
+    artifact = (
+        approval_artifact_store
+        .get_by_request_id(request_id)
+    )
+
+    action_status = state.get(
+        "action_status"
+    )
+
+    if action_status is not None:
+        status = action_status
+
+    elif artifact is None:
+        status = "approval_required"
+
+    elif artifact.approved:
+        status = (
+            "approved_pending_execution"
+        )
+
+    else:
+        status = (
+            "rejected_pending_execution"
+        )
+
     return {
-        "status": result["action_status"],
+        "status": status,
+        "thread_id": thread_id,
+        "request_id": request_id,
+        "action_name": (
+            request_data["action_name"]
+        ),
+        "arguments": (
+            request_data["arguments"]
+        ),
         "confidence_threshold": (
             inference_config_service
             .get_config()

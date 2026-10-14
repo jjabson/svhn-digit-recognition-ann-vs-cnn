@@ -23,3 +23,6 @@ RUNTIME_STATE_DATABASE_FILE = GENERATED_DIR / "runtime_state.db"
 APPROVAL_CHECKPOINT_DATABASE_FILE = (
     GENERATED_DIR / "approval_checkpoints.db"
 )
+APPROVAL_ARTIFACT_DATABASE_FILE = (
+    GENERATED_DIR / "approval_artifacts.db"
+)

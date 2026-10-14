@@ -1,136 +1,159 @@
-from mcp_server.server import (
-    get_inference_config,
-    inference_config_service,
-    inference_service,
-    resolve_confidence_threshold_approval,
-    set_confidence_threshold,
-)
+from __future__ import annotations
+
+import pytest
+
+import mcp_server.server as server
+from mcp.server.mcpserver.exceptions import ToolError
 
 
-def test_mcp_threshold_change_requires_approval():
-    original = (
-        inference_config_service
+def _different_threshold(
+    current_threshold: float,
+) -> float:
+    """
+    Return a valid threshold different from the current value.
+    """
+    if current_threshold != 0.95:
+        return 0.95
+
+    return 0.90
+
+
+def test_mcp_threshold_change_requires_trusted_approval():
+    """
+    MCP may request a controlled threshold change, but the request
+    must not mutate runtime configuration before trusted approval.
+    """
+    current_threshold = (
+        server.inference_config_service
         .get_config()
         .confidence_threshold
     )
 
-    result = set_confidence_threshold(0.95)
+    requested_threshold = _different_threshold(
+        current_threshold
+    )
+
+    result = server.set_confidence_threshold(
+        requested_threshold
+    )
 
     assert result["status"] == "approval_required"
+    assert result["thread_id"]
+    assert result["request_id"]
 
     assert (
-        inference_config_service
+        result["action_name"]
+        == "set_confidence_threshold"
+    )
+
+    assert result["arguments"] == {
+        "confidence_threshold": requested_threshold,
+    }
+
+    assert (
+        result["current_confidence_threshold"]
+        == current_threshold
+    )
+
+    assert (
+        server.inference_config_service
         .get_config()
         .confidence_threshold
-        == original
+        == current_threshold
     )
 
 
-def test_mcp_threshold_change_executes_after_approval():
-    result = set_confidence_threshold(0.95)
-
-    resolved = resolve_confidence_threshold_approval(
-        thread_id=result["thread_id"],
-        approved=True,
-        reason="Approved for test",
-    )
-
-    assert resolved["status"] == "executed"
-
-    assert (
-        resolved["confidence_threshold"]
-        == 0.95
-    )
-
-
-def test_mcp_threshold_change_remains_unchanged_after_rejection():
-    # Restore known starting state first.
-    inference_config_service.set_confidence_threshold(0.90)
-
-    result = set_confidence_threshold(0.95)
-
-    resolved = resolve_confidence_threshold_approval(
-        thread_id=result["thread_id"],
-        approved=False,
-        reason="Rejected for test",
-    )
-
-    assert resolved["status"] == "rejected"
-
-    assert (
-        inference_config_service
+def test_mcp_can_inspect_pending_approval_status():
+    """
+    MCP may inspect a controlled-action workflow but cannot authorize it.
+    """
+    current_threshold = (
+        server.inference_config_service
         .get_config()
         .confidence_threshold
-        == 0.90
     )
 
-def test_get_inference_config_reflects_approved_threshold_change():
-    inference_config_service.set_confidence_threshold(0.90)
-
-    request = set_confidence_threshold(0.95)
-
-    resolved = resolve_confidence_threshold_approval(
-        thread_id=request["thread_id"],
-        approved=True,
-        reason="Approved for read-after-write test",
+    requested_threshold = _different_threshold(
+        current_threshold
     )
 
-    assert resolved["status"] == "executed"
+    request_result = (
+        server.set_confidence_threshold(
+            requested_threshold
+        )
+    )
 
-    config = get_inference_config()
-
-    assert config.model_name == "cnn"
-    assert config.confidence_threshold == 0.95
-
-def test_inference_service_uses_shared_runtime_config():
-    inference_config_service.set_confidence_threshold(0.90)
+    status_result = (
+        server
+        .get_confidence_threshold_approval_status(
+            request_result["thread_id"]
+        )
+    )
 
     assert (
-        inference_service.policy.confidence_threshold
-        == 0.90
+        status_result["status"]
+        == "approval_required"
     )
-
-    inference_config_service.set_confidence_threshold(0.95)
 
     assert (
-        inference_service.policy.confidence_threshold
-        == 0.95
+        status_result["thread_id"]
+        == request_result["thread_id"]
     )
 
-def test_persisted_threshold_survives_service_reconstruction(tmp_path):
-    from config.inference_config import InferenceConfig
-    from config.inference_config_service import InferenceConfigService
-    from config.inference_config_store import InferenceConfigStore
-
-    database_file = tmp_path / "runtime_state.db"
-
-    store = InferenceConfigStore(
-        database_file=database_file,
+    assert (
+        status_result["request_id"]
+        == request_result["request_id"]
     )
 
-    first_service = InferenceConfigService(
-        InferenceConfig(
-            model_name="cnn",
-            confidence_threshold=0.90,
+    assert (
+        status_result["action_name"]
+        == "set_confidence_threshold"
+    )
+
+    assert status_result["arguments"] == {
+        "confidence_threshold": requested_threshold,
+    }
+
+    assert (
+        status_result["confidence_threshold"]
+        == current_threshold
+    )
+
+    assert (
+        server.inference_config_service
+        .get_config()
+        .confidence_threshold
+        == current_threshold
+    )
+
+
+def test_mcp_has_no_approval_authority():
+    """
+    The former MCP approval resolver must not exist.
+
+    An MCP consumer must never be able to authorize a controlled
+    action by supplying approved=True.
+    """
+    assert not hasattr(
+        server,
+        "resolve_confidence_threshold_approval",
+    )
+
+
+def test_unknown_approval_thread_cannot_be_inspected():
+    """
+    Unknown workflow identifiers fail closed.
+    """
+    with pytest.raises(
+        ToolError,
+        match=(
+            "No confidence-threshold approval "
+            "workflow found"
         ),
-        store=store,
-    )
-
-    first_service.set_confidence_threshold(0.95)
-
-    second_store = InferenceConfigStore(
-        database_file=database_file,
-    )
-
-    second_service = InferenceConfigService(
-        InferenceConfig(
-            model_name="cnn",
-            confidence_threshold=0.90,
-        ),
-        store=second_store,
-    )
-
-    assert (
-        second_service.get_config().confidence_threshold
-        == 0.95
-    )
+    ):
+        (
+            server
+            .get_confidence_threshold_approval_status(
+                "unknown-threshold-thread"
+            )
+        )

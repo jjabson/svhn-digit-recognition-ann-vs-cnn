@@ -63,7 +63,7 @@ def test_mcp_tool_discovery() -> None:
         "get_model_summary",
         "predict_digit",
         "set_confidence_threshold",
-        "resolve_confidence_threshold_approval",
+        "get_confidence_threshold_approval_status",
         "get_runtime_debug",
     }
 
@@ -81,6 +81,24 @@ def test_mcp_tool_discovery() -> None:
     assert (
             predict_digit.input_schema["properties"]["image_data"]["type"]
             == "string"
+    )
+
+    approval_status = tools_by_name[
+        "get_confidence_threshold_approval_status"
+    ]
+
+    assert (
+            approval_status
+            .input_schema["required"]
+            == ["thread_id"]
+    )
+
+    assert (
+            set(
+                approval_status
+                .input_schema["properties"]
+            )
+            == {"thread_id"}
     )
 
     prediction_properties = predict_digit.output_schema["properties"]

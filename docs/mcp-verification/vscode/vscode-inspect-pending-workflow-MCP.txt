@@ -1,0 +1,23 @@
+Prompt:
+Use get_confidence_threshold_approval_status with this thread_id:
+
+<THREAD_ID>
+
+Show the structured result.
+
+VS Code Response:
+get_confidence_threshold_approval_status
+Completed with input: {"serverName":"svhn","toolName":"svhn-get_confidence_threshold_approval_status"}
+
+```json
+{
+  "status": "approval_required",
+  "thread_id": "threshold-efb89f72-19ec-44b9-ade7-f4bc8e455bbe",
+  "request_id": "d6f0b9e9-7dd9-444c-9e73-f93c5cb5e645",
+  "action_name": "set_confidence_threshold",
+  "arguments": {
+    "confidence_threshold": 0.9
+  },
+  "confidence_threshold": 0.95
+}
+```

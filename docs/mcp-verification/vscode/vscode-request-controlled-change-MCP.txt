@@ -1,0 +1,30 @@
+Current settings:
+Read skill `python-fact-grounded-coding`
+
+get_inference_config
+Completed with input: {"serverName":"svhn","toolName":"svhn-get_inference_config"}
+
+The active inference config is **CNN**, with a confidence threshold of **0.95**.
+
+Prompt:
+Use the SVHN MCP server to change the confidence threshold to 0.90.
+Do not use any local shell commands.
+Show me the complete structured result returned by the tool.
+
+VS Code Response:
+set_confidence_threshold
+Completed with input: {"serverName":"svhn","toolName":"svhn-set_confidence_threshold"}
+
+```json
+{
+  "status": "approval_required",
+  "thread_id": "threshold-efb89f72-19ec-44b9-ade7-f4bc8e455bbe",
+  "request_id": "d6f0b9e9-7dd9-444c-9e73-f93c5cb5e645",
+  "action_name": "set_confidence_threshold",
+  "arguments": {
+    "confidence_threshold": 0.9
+  },
+  "current_confidence_threshold": 0.95,
+  "message": "Trusted human approval is required before changing the inference confidence threshold from 0.95 to 0.90."
+}
+```

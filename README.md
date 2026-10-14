@@ -40,85 +40,124 @@ and controlled software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **222 automated tests** covering preprocessing, inference, orchestration,
+- **273 automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
+- Application-owned action authorization with `READ_ONLY`, `CONTROLLED`,
+  and `PROHIBITED` risk classes.
+- Trusted human-in-the-loop authorization for controlled runtime changes,
+  separated from untrusted MCP/agent requests.
+- Server-owned, single-use approval artifacts persisted in SQLite and bound
+  to the exact controlled action and arguments being authorized.
+- LangGraph provides durable interrupt/resume workflow mechanics while
+  application services remain authoritative for approval verification and
+  controlled execution.
+- Durable runtime configuration persistence and cross-process synchronization
+  using SQLite.
+- Durable LangGraph approval checkpoints and trusted approval artifacts survive
+  MCP process restarts and workflow reconstruction.
+- Independent security verification confirmed that external MCP consumers can
+  request and inspect controlled actions but cannot approve, reject, resume,
+  or self-authorize them.
 
 ---
 
 ## System Architecture
 
 ```text
-                         External Consumers
-                  ┌──────────────┴──────────────┐
-                  │                             │
-                  ▼                             ▼
-             FastAPI Clients              MCP Consumers
-                  │                             │
-                  ▼                    ┌────────┴────────┐
-             FastAPI API               │                 │
-                  │                    ▼                 ▼
-                  │              Claude Code      VS Code/Copilot
-                  │                    │                 │
-                  │                    └────────┬────────┘
-                  │                             │
-                  │                             ▼
-                  │                      ┌─────────────┐
-                  │                      │ MCP Server  │
-                  │                      └──────┬──────┘
-                  │                             │
-                  └──────────────┬──────────────┘
-                                 │
-             ┌───────────────────┼───────────────────┐
-             │                   │                   │
-             ▼                   ▼                   ▼
-      Inference Service   Evaluation Service   Controlled Actions
-             │                   │                   │
-             │                   │                   ▼
-             │                   │              ActionPolicy
-             │                   │                   │
-             │                   │                   ▼
-             │                   │        ControlledActionExecutor
-             │                   │                   │
-             │                   │                   ▼
-             │                   │            LangGraph HITL
-             │                   │           interrupt / resume
-             │                   │                   │
-             ▼                   ▼                   ▼
-      Runtime Config       Evaluation SQLite   Approval Checkpoints
-             │                                      SQLite
-             ▼
-      runtime_state.db
-             │
-             ▼
-      Inference Policy
-             │
-             ▼
-       SVHN Predictor
-             │
-             ▼
-     Image Preprocessing
-             │
-             ▼
-       TensorFlow CNN
+                              External Consumers
+                     ┌──────────────┴──────────────┐
+                     │                             │
+                     ▼                             ▼
+                FastAPI Clients               MCP Consumers
+                     │                             │
+                     ▼                             ▼
+                FastAPI API                  SVHN MCP Server
+                                                   │
+                          ┌────────────────────────┼───────────────────────┐
+                          │                        │                       │
+                          ▼                        ▼                       ▼
+                    Read-only Tools       Controlled Requests       Status Inspection
+                                                   │
+                                                   ▼
+                                            ActionPolicy
+                                                   │
+                                                   ▼
+                                           ApprovalRequest
+                                                   │
+                                                   ▼
+                                          LangGraph interrupt
+                                                   │
+                                                   │
+                               MCP cannot authorize this boundary
+                                                   │
+                                                   ▼
+                                      Trusted Local Human Channel
+                                                   │
+                                                   ▼
+                                          ApprovalArtifact
+                                                   │
+                                                   ▼
+                                   approval_artifacts.db
+                                                   │
+                                                   ▼
+                                      TrustedApprovalVerifier
+                                                   │
+                                                   ▼
+                                    ControlledActionExecutor
+                                      execute_trusted()
+                                                   │
+                                                   ▼
+                                    single-use artifact consume
+                                                   │
+                                                   ▼
+                                      InferenceConfigService
+                                                   │
+                         ┌─────────────────────────┴────────────────────────┐
+                         │                                                  │
+                         ▼                                                  ▼
+                runtime_state.db                                  Active Runtime Config
+                         │                                                  │
+                         └─────────────────────────┬────────────────────────┘
+                                                   │
+                                                   ▼
+                                          Inference Policy
+                                                   │
+                                                   ▼
+                                            SVHN Predictor
+                                                   │
+                                                   ▼
+                                         Image Preprocessing
+                                                   │
+                                                   ▼
+                                            TensorFlow CNN
 ```
 
 The architecture deliberately separates:
+
 - model execution;
 - inference and fallback policy;
 - runtime configuration;
 - evaluation and reliability persistence;
 - external API and MCP contracts;
-- action authorization;
-- human approval workflow state;
+- action risk classification;
+- controlled-action requests;
+- trusted human authorization;
+- approval evidence persistence;
+- workflow pause/resume state;
+- controlled execution;
 - durable operational state.
 
 FastAPI and MCP are external adapters over application services rather than
-owners of model, inference, or authorization policy.
+owners of inference policy or authorization.
 
-LangGraph owns pause/resume workflow mechanics for controlled actions, while
-application code remains authoritative for risk classification, approval
-validation, and controlled execution.
+MCP consumers are intentionally treated as untrusted authorization sources.
+They may request controlled actions and inspect their status, but they cannot
+create trusted approval evidence or directly authorize execution.
+
+LangGraph owns durable pause/resume workflow mechanics. Trusted approval is
+established separately through application-owned approval artifacts and
+verified immediately before controlled execution.
 
 ---
 
@@ -295,24 +334,54 @@ created runtime.
 
 ## Human-in-the-Loop Controlled Actions
 
-Runtime mutation is governed by deterministic application-owned authorization
-rather than by the LLM, MCP client, or LangGraph itself.
+Runtime mutation is governed by deterministic, application-owned authorization
+rather than by an LLM, MCP client, agent framework, or LangGraph resume payload.
 
 Actions are classified into three risk levels:
 
 | Risk | Meaning |
 |---|---|
 | `READ_ONLY` | May execute without human approval |
-| `CONTROLLED` | Requires explicit approval before execution |
+| `CONTROLLED` | Requires trusted human approval before execution |
 | `PROHIBITED` | Must not execute |
 
-Current controlled action:
+The current controlled action is:
 
 ```text
 set_confidence_threshold
 ```
 
-The workflow is:
+### Trust boundary
+
+External MCP consumers are treated as untrusted authorization sources.
+
+They may:
+
+- request a controlled action;
+- receive the generated `request_id` and `thread_id`;
+- inspect the pending workflow;
+- inspect the final workflow status.
+
+They may not:
+
+- approve or reject the request;
+- create trusted approval evidence;
+- mark themselves as trusted;
+- resume a workflow with authorization authority;
+- execute the controlled action directly.
+
+The former MCP approval resolver was removed. In particular, an MCP-supplied
+value such as:
+
+```text
+approved = true
+```
+
+does not constitute trusted authorization.
+
+### Trusted approval flow
+
+The controlled-action workflow is:
 
 ```text
 MCP controlled-action request
@@ -327,57 +396,174 @@ ApprovalRequest
 LangGraph interrupt()
         │
         ▼
-Human approval required
+approval_required
         │
-        ├── rejected ─────────────► no configuration change
+        ├──────────────► MCP may inspect status
         │
-        └── approved
-                │
-                ▼
-        ControlledActionExecutor
-                │
-                ▼
-        exact request/decision validation
-                │
-                ▼
-        InferenceConfigService
-                │
-                ▼
-        persistent runtime update
+        │
+        ▼
+Trusted local human channel
+        │
+        ▼
+ApprovalArtifact
+        │
+        ▼
+SQLite approval-artifact store
+        │
+        ▼
+LangGraph resume
+        │
+        ▼
+TrustedApprovalVerifier
+        │
+        ▼
+ControlledActionExecutor.execute_trusted()
+        │
+        ▼
+single-use artifact consumption
+        │
+        ▼
+InferenceConfigService
+        │
+        ▼
+persistent runtime update
 ```
 
-Approval is bound to the exact action and exact arguments originally requested.
-A decision for one request cannot authorize a different controlled action or
-different argument set.
+The trusted local human channel is currently provided by:
 
-Approval workflow state is persisted through LangGraph's SQLite checkpointer:
+```bash
+python -m tools.approval.run_threshold_approval <THREAD_ID>
+```
+
+The CLI retrieves the original persisted approval request, presents the exact
+requested action and arguments to the human operator, records the resulting
+trusted decision as an `ApprovalArtifact`, and resumes the existing durable
+workflow.
+
+### Approval artifacts
+
+Trusted human approval evidence is represented independently from the
+LangGraph workflow state.
+
+Each approval artifact is bound to:
+
+- a unique artifact ID;
+- the original approval request ID;
+- the exact controlled action;
+- canonicalized action arguments;
+- the approval or rejection decision;
+- a trusted issuer;
+- an issuance timestamp;
+- an expiration timestamp;
+- a unique nonce;
+- an optional consumption timestamp.
+
+Artifacts are persisted in:
+
+```text
+generated/approval_artifacts.db
+```
+
+Approval artifacts are immutable and insert-only. Only one artifact may exist
+for a request.
+
+Approved artifacts are single-use. The executor atomically marks an artifact
+as consumed before executing the controlled mutation, preventing replay and
+providing at-most-once authorization semantics.
+
+### Durable workflow state
+
+LangGraph approval workflow state is persisted separately through its SQLite
+checkpointer:
 
 ```text
 generated/approval_checkpoints.db
 ```
 
-This allows a pending approval to survive MCP process termination.
+This allows a pending controlled-action request to survive MCP process
+termination and later resume using the same `thread_id`.
 
-The restart-recovery path was verified end to end:
+Runtime configuration is persisted independently in:
 
 ```text
-request threshold change
-        ↓
-approval_required
-        ↓
-process terminates before approval
-        ↓
-new MCP runtime starts
-        ↓
-original thread_id resumes
-        ↓
-approval executes
-        ↓
-new configuration persists
+generated/runtime_state.db
 ```
 
-LangGraph is responsible for durable pause/resume workflow state. Application
-code remains responsible for authorization rules and controlled execution.
+This separation keeps three distinct responsibilities explicit:
+
+```text
+approval_checkpoints.db
+    → workflow progress
+
+approval_artifacts.db
+    → trusted human authorization evidence
+
+runtime_state.db
+    → active serving configuration
+```
+
+### Cross-process runtime synchronization
+
+Runtime configuration may be changed by the trusted approval CLI while the MCP
+server is already running.
+
+`InferenceConfigService` refreshes persisted configuration before returning the
+active state, allowing long-running processes to observe changes made by other
+processes without requiring an MCP restart.
+
+The verified behavior is:
+
+```text
+trusted CLI process
+        │
+        ▼
+writes new runtime configuration
+        │
+        ▼
+runtime_state.db
+        │
+        ▼
+already-running MCP process
+        │
+        ▼
+refreshes persisted configuration
+        │
+        ▼
+observes new threshold
+```
+
+### Security invariant
+
+Controlled execution requires all of the following:
+
+```text
+valid pending ApprovalRequest
+        +
+exact action match
+        +
+exact argument match
+        +
+trusted ApprovalArtifact
+        +
+trusted issuer
+        +
+artifact not expired
+        +
+artifact not previously consumed
+```
+
+Only after those conditions are satisfied may the controlled mutation execute.
+
+This establishes the core invariant:
+
+```text
+MCP request ≠ authorization
+
+MCP approved=true ≠ authorization
+
+Trusted human approval evidence
+is required for controlled execution.
+```
 
 ---
 
@@ -701,8 +887,12 @@ The server currently exposes nine tools:
 | `get_evaluation_insights()` | Retrieve derived evaluation insights |
 | `get_digit_metrics(digit)` | Retrieve per-digit metrics |
 | `set_confidence_threshold(value)` | Request a controlled threshold change |
-| `resolve_confidence_threshold_approval(...)` | Resume a pending approval workflow |
+| `get_confidence_threshold_approval_status(thread_id)` | Inspect a controlled-action workflow without authorization authority |
 | `get_runtime_debug()` | Inspect runtime identity/state for diagnostics |
+
+The MCP interface intentionally exposes no tool capable of approving,
+rejecting, resuming with authorization authority, or otherwise self-authorizing
+a controlled action.
 
 ### Read-only interoperability
 
@@ -733,38 +923,141 @@ historical performance context
 external-agent explanation
 ```
 
-### Controlled-action interoperability
+### Trusted controlled-action interoperability
 
-VS Code/Copilot additionally verified the controlled-action workflow:
+VS Code/Copilot independently verified the trusted controlled-action workflow.
+
+The external MCP consumer requested a confidence-threshold change:
 
 ```text
-set_confidence_threshold
-        ↓
-approval_required
-        ↓
-human approval
-        ↓
-resolve_confidence_threshold_approval
-        ↓
-configuration updated
+0.90 → 0.95
 ```
 
-The MCP client may present the approval requirement through its own user
-interface, but the controlled action itself remains governed by application
-authorization and LangGraph workflow state.
+The MCP server returned:
+
+```text
+approval_required
+```
+
+including the generated `thread_id`, `request_id`, action name, exact
+arguments, and current threshold.
+
+Before human approval:
+
+- `get_confidence_threshold_approval_status` reported
+  `approval_required`;
+- `get_inference_config` continued to report `0.90`;
+- MCP tool discovery exposed no approve, reject, resume, or authorization tool.
+
+The trusted human then approved the request through the local application-owned
+CLI:
+
+```bash
+python -m tools.approval.run_threshold_approval <THREAD_ID>
+```
+
+The trusted channel recorded the approval artifact and resumed the durable
+workflow.
+
+The resulting execution reported:
+
+```text
+Trusted decision recorded: approved
+Action status: executed
+Active confidence threshold: 0.95
+```
+
+Without restarting the MCP server, the same external MCP consumer then queried
+the workflow and active configuration again.
+
+The MCP server reported:
+
+```text
+approval status: executed
+confidence threshold: 0.95
+```
+
+This verifies the complete separation between external agent capability and
+trusted authorization:
+
+```text
+External MCP Consumer
+        │
+        ├── request
+        ├── inspect
+        │
+        └── cannot authorize
+                 │
+                 ▼
+        Trusted Human Channel
+                 │
+                 ▼
+        ApprovalArtifact
+                 │
+                 ▼
+       Trusted verification
+                 │
+                 ▼
+        Controlled execution
+```
+
+A separate rejection scenario was also verified. A requested change to `0.92`
+was rejected through the trusted CLI, the workflow returned `rejected`, and no
+unauthorized configuration mutation occurred.
 
 ### Process-restart recovery
 
-Durable workflow behavior was independently verified by terminating the MCP
-Python process while a controlled action was awaiting approval.
+Durable workflow behavior has been verified across process reconstruction.
 
-After a new MCP runtime was created:
+A controlled threshold request may be interrupted while awaiting human
+authorization and later recovered from SQLite using the original
+`thread_id`.
 
-- persisted inference configuration was restored;
-- the original approval `thread_id` remained resumable;
-- the pre-crash approval request was recovered from SQLite;
-- the controlled action executed successfully after approval;
-- the updated threshold was persisted for subsequent runtimes.
+The restart-recovery path is:
+
+```text
+request threshold change
+        │
+        ▼
+approval_required
+        │
+        ▼
+process terminates before approval
+        │
+        ▼
+new application runtime
+        │
+        ├── restores runtime configuration
+        ├── restores LangGraph checkpoint
+        └── restores original ApprovalRequest
+                 │
+                 ▼
+        trusted human decision
+                 │
+                 ▼
+        persisted ApprovalArtifact
+                 │
+                 ▼
+        workflow resume
+                 │
+                 ▼
+        trusted verification
+                 │
+                 ▼
+        controlled execution
+```
+
+Automated tests verify that:
+
+- the pending LangGraph checkpoint survives graph reconstruction;
+- the original approval request ID is preserved;
+- a trusted approval artifact may be created after reconstruction;
+- the recovered workflow resumes successfully;
+- the artifact is consumed after authorized execution;
+- the resulting runtime configuration is persisted.
+
+Runtime configuration persistence was also independently verified across MCP
+process restarts.
 
 ### Architectural result
 
@@ -775,21 +1068,42 @@ External MCP Consumer
         ▼
 SVHN MCP Server
         │
-        ├── Read-only capabilities
-        │
-        └── Controlled capabilities
-                    │
-                    ▼
-             Application Policy
-                    │
-                    ▼
-             LangGraph HITL
-                    │
-                    ▼
-            Durable Checkpoint
+        ├── inference capabilities
+        ├── evaluation capabilities
+        ├── configuration inspection
+        ├── controlled-action request
+        └── approval-status inspection
+                 │
+                 ▼
+           Application Policy
+                 │
+                 ▼
+          ApprovalRequest
+                 │
+                 ▼
+          LangGraph HITL
+          interrupt / resume
+                 │
+                 │
+       authorization boundary
+                 │
+                 ▼
+       Trusted Human Channel
+                 │
+                 ▼
+         ApprovalArtifact
+                 │
+                 ▼
+    TrustedApprovalVerifier
+                 │
+                 ▼
+ ControlledActionExecutor
+                 │
+                 ▼
+      Runtime Configuration
 ```
 
-External agents own conversational reasoning and capability selection.
+External agents own conversational reasoning, tool selection, and presentation.
 
 The application remains authoritative for:
 
@@ -799,8 +1113,15 @@ The application remains authoritative for:
 - fallback behavior;
 - evaluation facts;
 - risk classification;
-- authorization;
-- controlled action execution.
+- approval-request identity;
+- trusted approval verification;
+- replay prevention;
+- controlled action execution;
+- persistent runtime state.
+
+This separation allows independent MCP consumers to use the same ML system
+without giving those consumers authorization authority over controlled runtime
+changes.
 
 ### Verification status
 
@@ -813,10 +1134,16 @@ The application remains authoritative for:
 | Image inference | Passed | Passed |
 | Evaluation-context retrieval | Passed | Passed |
 | Multi-tool synthesis | Passed | Passed |
-| Controlled threshold workflow | — | Passed |
-| Human approval / resume | — | Passed |
-| Process-restart recovery | — | Passed |
-| Dependency on internal agent | None | None |
+| Controlled-action request | — | Passed |
+| Pending approval inspection | — | Passed |
+| MCP self-authorization blocked | — | Passed |
+| Trusted human CLI approval | — | Passed |
+| Trusted human rejection | — | Passed |
+| Trusted artifact verification | — | Passed |
+| Controlled execution after trusted approval | — | Passed |
+| Process-restart workflow recovery | — | Passed |
+| Cross-process runtime synchronization | — | Passed |
+| Dependency on internal conversational agent | None | None |
 
 ---
 
@@ -842,63 +1169,38 @@ The container launches the FastAPI application through Uvicorn on port
 ## Repository Structure
 
 ```text
-.
 ├── agent/
-│   ├── approval_graph.py             # HITL controlled-action workflow
+│   ├── approval_graph.py             # Durable trusted-approval workflow
 │   ├── graph.py                      # Agent workflow construction
 │   ├── nodes.py                      # Agent nodes
 │   └── state.py                      # Agent state contracts
 │
-├── api/
-│   └── app.py                        # FastAPI application
-│
 ├── config/
-│   ├── inference_config.py           # Typed inference configuration
-│   ├── inference_config_service.py   # Active runtime configuration service
-│   ├── inference_config_store.py     # Persistent runtime config store
+│   ├── approval_artifact_store.py    # Persistent trusted approval artifacts
 │   ├── approval_checkpoint.py        # Durable LangGraph checkpointer
+│   ├── inference_config.py           # Typed inference configuration
+│   ├── inference_config_service.py   # Cross-process runtime configuration service
+│   ├── inference_config_store.py     # Persistent runtime configuration
 │   └── project_paths.py              # Canonical project paths
 │
-├── mcp_server/
-│   ├── server.py                     # MCP capability interface
-│   └── schemas.py                    # MCP result contracts
-│
 ├── src/
-│   ├── inference.py                  # SVHN CNN predictor
-│   ├── preprocessing.py              # Image preprocessing
-│   ├── orchestration/
-│   │   ├── action_policy.py          # Action risk classification
-│   │   ├── approval.py               # Approval domain contracts
-│   │   ├── controlled_executor.py    # Authorized controlled execution
-│   │   ├── inference_service.py      # Runtime inference service
-│   │   └── ...
-│   └── schemas/                      # Typed application/API contracts
+│   └── orchestration/
+│       ├── action_policy.py          # Action risk classification
+│       ├── approval.py               # Approval request/decision contracts
+│       ├── approval_artifact.py      # Trusted approval evidence domain
+│       ├── controlled_executor.py    # Trusted controlled-action execution
+│       ├── trusted_approval.py       # Trusted artifact verification
+│       ├── trusted_approval_service.py # Trusted human decision recording
+│       └── ...
 │
 ├── tools/
-│   ├── approval/                     # HITL verification utilities
-│   ├── evaluation/                   # Evaluation persistence & services
-│   ├── reliability/                  # Confidence, calibration & failure analysis
-│   ├── figures/                      # Automated figure generation
-│   └── model/                        # Model inspection
+│   └── approval/
+│       └── run_threshold_approval.py # Trusted local human approval channel
 │
-├── docs/
-│   └── mcp-verification/
-│       ├── claude/                   # Claude Code interoperability evidence
-│       └── vscode/                   # VS Code/Copilot interoperability evidence
-│
-├── tests/                            # Automated regression suite
-├── reports/                          # Typst report source/output
-├── figures/                          # Generated report figures
-├── artifacts/                        # Evaluation/model artifacts
-├── models/                           # Saved CNN
-├── sample_images/                    # Integration-test/sample inputs
-├── notebooks/                        # Original modeling work
-├── generated/                        # Generated runtime/report artifacts
-│
-├── Dockerfile
-├── requirements.txt
-├── CHANGELOG.md
-└── README.md
+├── generated/
+│   ├── runtime_state.db              # Active runtime configuration
+│   ├── approval_checkpoints.db       # Durable LangGraph workflow state
+│   └── approval_artifacts.db         # Trusted human approval evidence
 ```
 Persistent generated databases include:
 

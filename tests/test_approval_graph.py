@@ -1,14 +1,25 @@
 from langgraph.types import Command
+from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.approval_graph import build_approval_graph
+from config.approval_artifact_store import (
+    ApprovalArtifactStore,
+)
 from config.inference_config import InferenceConfig
 from config.inference_config_service import (
     InferenceConfigService,
 )
-from langgraph.checkpoint.memory import InMemorySaver
+from src.orchestration.approval import ApprovalRequest
+from src.orchestration.trusted_approval import (
+    TrustedApprovalVerifier,
+)
+from src.orchestration.trusted_approval_service import (
+    DEFAULT_TRUSTED_APPROVAL_ISSUER,
+    TrustedApprovalService,
+)
 
 
-def _build_test_graph():
+def _build_test_graph(tmp_path):
     config_service = InferenceConfigService(
         InferenceConfig(
             model_name="cnn",
@@ -16,11 +27,33 @@ def _build_test_graph():
         )
     )
 
-    graph = build_approval_graph(
-        config_service=config_service,
+    artifact_store = ApprovalArtifactStore(
+        tmp_path / "approval_artifacts.db"
     )
 
-    return graph, config_service
+    verifier = TrustedApprovalVerifier(
+        artifact_store,
+        trusted_issuers={
+            DEFAULT_TRUSTED_APPROVAL_ISSUER,
+        },
+    )
+
+    trusted_service = TrustedApprovalService(
+        artifact_store
+    )
+
+    graph = build_approval_graph(
+        config_service=config_service,
+        artifact_store=artifact_store,
+        trusted_approval_verifier=verifier,
+    )
+
+    return (
+        graph,
+        config_service,
+        artifact_store,
+        trusted_service,
+    )
 
 
 def _thread_config(thread_id: str):
@@ -31,8 +64,30 @@ def _thread_config(thread_id: str):
     }
 
 
-def test_graph_interrupts_before_threshold_change():
-    graph, config_service = _build_test_graph()
+def _request_from_interrupt(
+    result,
+) -> ApprovalRequest:
+    payload = (
+        result["__interrupt__"][0].value
+    )
+
+    return ApprovalRequest(
+        request_id=payload["request_id"],
+        action_name=payload["action_name"],
+        arguments=payload["arguments"],
+        reason=payload["reason"],
+    )
+
+
+def test_graph_interrupts_before_threshold_change(
+    tmp_path,
+):
+    (
+        graph,
+        config_service,
+        _,
+        _,
+    ) = _build_test_graph(tmp_path)
 
     config = _thread_config(
         "interrupt-before-change"
@@ -41,7 +96,9 @@ def test_graph_interrupts_before_threshold_change():
     result = graph.invoke(
         {
             "requested_threshold": 0.95,
-            "reason": "Use a stricter threshold",
+            "reason": (
+                "Use a stricter threshold"
+            ),
         },
         config=config,
     )
@@ -56,8 +113,12 @@ def test_graph_interrupts_before_threshold_change():
     )
 
 
-def test_interrupt_contains_approval_context():
-    graph, _ = _build_test_graph()
+def test_interrupt_contains_approval_context(
+    tmp_path,
+):
+    graph, _, _, _ = (
+        _build_test_graph(tmp_path)
+    )
 
     config = _thread_config(
         "interrupt-context"
@@ -66,18 +127,21 @@ def test_interrupt_contains_approval_context():
     result = graph.invoke(
         {
             "requested_threshold": 0.95,
-            "reason": "Use a stricter threshold",
+            "reason": (
+                "Use a stricter threshold"
+            ),
         },
         config=config,
     )
 
-    interrupts = result["__interrupt__"]
+    payload = (
+        result["__interrupt__"][0].value
+    )
 
-    assert len(interrupts) == 1
-
-    payload = interrupts[0].value
-
-    assert payload["type"] == "approval_required"
+    assert (
+        payload["type"]
+        == "approval_required"
+    )
 
     assert (
         payload["action_name"]
@@ -89,47 +153,60 @@ def test_interrupt_contains_approval_context():
     }
 
     assert (
-        payload["current_confidence_threshold"]
+        payload[
+            "current_confidence_threshold"
+        ]
         == 0.90
     )
 
 
-def test_approved_resume_changes_threshold():
-    graph, config_service = _build_test_graph()
+def test_trusted_approved_resume_changes_threshold(
+    tmp_path,
+):
+    (
+        graph,
+        config_service,
+        _,
+        trusted_service,
+    ) = _build_test_graph(tmp_path)
 
     config = _thread_config(
-        "approve-threshold-change"
+        "trusted-approve"
     )
 
-    initial_result = graph.invoke(
+    initial = graph.invoke(
         {
             "requested_threshold": 0.95,
-            "reason": "Use a stricter threshold",
+            "reason": (
+                "Use a stricter threshold"
+            ),
         },
         config=config,
     )
 
-    assert "__interrupt__" in initial_result
+    request = _request_from_interrupt(
+        initial
+    )
 
-    resumed_result = graph.invoke(
+    trusted_service.record_decision(
+        request,
+        approved=True,
+    )
+
+    resumed = graph.invoke(
         Command(
             resume={
-                "approved": True,
-                "reason": "Approved by human",
+                "source": (
+                    "trusted_local_human_channel"
+                )
             }
         ),
         config=config,
     )
 
     assert (
-        resumed_result["action_status"]
+        resumed["action_status"]
         == "executed"
-    )
-
-    assert (
-        resumed_result["action_result"]
-        ["confidence_threshold"]
-        == 0.95
     )
 
     assert (
@@ -140,35 +217,52 @@ def test_approved_resume_changes_threshold():
     )
 
 
-def test_rejected_resume_preserves_threshold():
-    graph, config_service = _build_test_graph()
+def test_trusted_rejection_preserves_threshold(
+    tmp_path,
+):
+    (
+        graph,
+        config_service,
+        _,
+        trusted_service,
+    ) = _build_test_graph(tmp_path)
 
     config = _thread_config(
-        "reject-threshold-change"
+        "trusted-reject"
     )
 
-    initial_result = graph.invoke(
+    initial = graph.invoke(
         {
             "requested_threshold": 0.95,
-            "reason": "Use a stricter threshold",
+            "reason": (
+                "Use a stricter threshold"
+            ),
         },
         config=config,
     )
 
-    assert "__interrupt__" in initial_result
+    request = _request_from_interrupt(
+        initial
+    )
 
-    resumed_result = graph.invoke(
+    trusted_service.record_decision(
+        request,
+        approved=False,
+    )
+
+    resumed = graph.invoke(
         Command(
             resume={
-                "approved": False,
-                "reason": "Human rejected change",
+                "source": (
+                    "trusted_local_human_channel"
+                )
             }
         ),
         config=config,
     )
 
     assert (
-        resumed_result["action_status"]
+        resumed["action_status"]
         == "rejected"
     )
 
@@ -180,46 +274,109 @@ def test_rejected_resume_preserves_threshold():
     )
 
 
-def test_approval_request_id_survives_interrupt_resume():
-    graph, _ = _build_test_graph()
+def test_raw_approved_resume_cannot_self_authorize(
+    tmp_path,
+):
+    (
+        graph,
+        config_service,
+        _,
+        _,
+    ) = _build_test_graph(tmp_path)
 
     config = _thread_config(
-        "request-id-survives"
+        "untrusted-self-approval"
     )
 
-    initial_result = graph.invoke(
+    graph.invoke(
         {
             "requested_threshold": 0.95,
-            "reason": "Use a stricter threshold",
+            "reason": (
+                "Use a stricter threshold"
+            ),
         },
         config=config,
     )
 
-    interrupt_payload = (
-        initial_result["__interrupt__"][0].value
-    )
-
-    request_id_before_resume = (
-        interrupt_payload["request_id"]
-    )
-
-    resumed_result = graph.invoke(
+    resumed = graph.invoke(
         Command(
             resume={
                 "approved": True,
-                "reason": "Approved",
+                "reason": (
+                    "Agent claims approval"
+                ),
             }
         ),
         config=config,
     )
 
     assert (
-        resumed_result["approval_request"]
-        ["request_id"]
-        == request_id_before_resume
+        resumed["action_status"]
+        == "denied"
     )
 
-def test_approval_graph_accepts_injected_checkpointer():
+    assert (
+        config_service
+        .get_config()
+        .confidence_threshold
+        == 0.90
+    )
+
+
+def test_approval_request_id_survives_resume(
+    tmp_path,
+):
+    (
+        graph,
+        _,
+        _,
+        trusted_service,
+    ) = _build_test_graph(tmp_path)
+
+    config = _thread_config(
+        "request-id-survives"
+    )
+
+    initial = graph.invoke(
+        {
+            "requested_threshold": 0.95,
+            "reason": (
+                "Use a stricter threshold"
+            ),
+        },
+        config=config,
+    )
+
+    request = _request_from_interrupt(
+        initial
+    )
+
+    request_id = request.request_id
+
+    trusted_service.record_decision(
+        request,
+        approved=True,
+    )
+
+    resumed = graph.invoke(
+        Command(
+            resume={
+                "source": "trusted_cli",
+            }
+        ),
+        config=config,
+    )
+
+    assert (
+        resumed["approval_request"]
+        ["request_id"]
+        == request_id
+    )
+
+
+def test_approval_graph_accepts_injected_checkpointer(
+    tmp_path,
+):
     config_service = InferenceConfigService(
         InferenceConfig(
             model_name="cnn",
@@ -227,11 +384,27 @@ def test_approval_graph_accepts_injected_checkpointer():
         )
     )
 
+    artifact_store = ApprovalArtifactStore(
+        tmp_path / "approval_artifacts.db"
+    )
+
+    verifier = TrustedApprovalVerifier(
+        artifact_store,
+        trusted_issuers={
+            DEFAULT_TRUSTED_APPROVAL_ISSUER,
+        },
+    )
+
     checkpointer = InMemorySaver()
 
     graph = build_approval_graph(
         config_service=config_service,
+        artifact_store=artifact_store,
+        trusted_approval_verifier=verifier,
         checkpointer=checkpointer,
     )
 
-    assert graph.checkpointer is checkpointer
+    assert (
+        graph.checkpointer
+        is checkpointer
+    )

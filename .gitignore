@@ -31,4 +31,5 @@ data/*.hdf5
 uv.lock
 
 generated/runtime_state.db
-generated/approval_checkpoints.db:q
+generated/approval_checkpoints.db
+generated/approval_artifacts.db

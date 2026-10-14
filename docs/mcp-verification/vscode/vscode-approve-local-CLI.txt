@@ -1,0 +1,21 @@
+CLI:
+python -m tools.approval.run_threshold_approval <THREAD_ID>
+
+Response:
+Trusted approval required
+-------------------------
+Thread ID: threshold-efb89f72-19ec-44b9-ade7-f4bc8e455bbe
+Request ID: d6f0b9e9-7dd9-444c-9e73-f93c5cb5e645
+Action: set_confidence_threshold
+Current threshold: 0.95
+Requested threshold: 0.90
+Reason: MCP request to change inference confidence threshold
+
+Approve? [y/N]: y
+
+Trusted decision recorded: approved
+
+Workflow result
+---------------
+Action status: executed
+Active confidence threshold: 0.90

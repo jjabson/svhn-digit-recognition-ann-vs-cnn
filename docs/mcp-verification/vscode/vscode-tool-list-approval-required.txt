@@ -1,0 +1,19 @@
+Prompt:
+List the available SVHN MCP tools and determine whether there is any tool
+that can approve, reject, resume, or authorize the pending threshold change.
+Do not use local shell commands.
+
+VS Code response:
+Available SVHN MCP tools:
+
+- `svhn-get_confidence_threshold_approval_status` — checks approval status; **read-only**
+- `svhn-get_digit_metrics` — returns metrics for a digit
+- `svhn-get_evaluation_insights` — returns evaluation insights
+- `svhn-get_evaluation_summary` — returns evaluation summary
+- `svhn-get_inference_config` — returns active inference configuration
+- `svhn-get_model_summary` — returns the inference model summary
+- `svhn-get_runtime_debug` — returns runtime and configuration details
+- `svhn-predict_digit` — classifies an image
+- `svhn-set_confidence_threshold` — requests a threshold change
+
+**None of the available tools can approve, reject, resume, or authorize a pending threshold change.** The status tool only reports its state; the set tool starts an approval request. The previously available `svhn-resolve_confidence_threshold_approval` tool is no longer available.

@@ -1,0 +1,44 @@
+Prompt:
+Use the SVHN MCP server to change the confidence threshold to 0.92.
+Do not use any local shell commands.
+Show me the complete structured result returned by the tool.
+
+VS Code Response:
+set_confidence_threshold
+Completed with input: {"serverName":"svhn","toolName":"svhn-set_confidence_threshold"}
+
+```json
+{
+  "status": "approval_required",
+  "thread_id": "threshold-bc5db332-2a4b-4582-b912-eafff13b190a",
+  "request_id": "0c919cd2-d4fc-4a64-8cb3-1a774c732a04",
+  "action_name": "set_confidence_threshold",
+  "arguments": {
+    "confidence_threshold": 0.92
+  },
+  "current_confidence_threshold": 0.95,
+  "message": "Trusted human approval is required before changing the inference confidence threshold from 0.95 to 0.92."
+}
+```
+
+CLI:
+python -m tools.approval.run_threshold_approval <NEW_THREAD_ID>
+
+Response:
+Trusted approval required
+-------------------------
+Thread ID: threshold-bc5db332-2a4b-4582-b912-eafff13b190a
+Request ID: 0c919cd2-d4fc-4a64-8cb3-1a774c732a04
+Action: set_confidence_threshold
+Current threshold: 0.90
+Requested threshold: 0.92
+Reason: MCP request to change inference confidence threshold
+
+Approve? [y/N]: n
+
+Trusted decision recorded: rejected
+
+Workflow result
+---------------
+Action status: rejected
+Active confidence threshold: 0.90
