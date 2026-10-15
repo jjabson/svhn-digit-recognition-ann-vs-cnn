@@ -31,8 +31,6 @@ and controlled software architecture.
   and `PROHIBITED` risk classes.
 - Human-in-the-loop approval workflow for controlled runtime changes using
   LangGraph interrupt/resume semantics.
-- Durable runtime configuration persistence using SQLite.
-- Durable LangGraph approval/checkpoint persistence across MCP process restarts.
 - Typed Python domain models using dataclasses and Pydantic API contracts.
 - SQLite-backed persisted evaluation and per-prediction reliability observations.
 - Confidence, threshold, selective-risk, and calibration analysis.
@@ -43,8 +41,6 @@ and controlled software architecture.
 - **273 automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
-- Application-owned action authorization with `READ_ONLY`, `CONTROLLED`,
-  and `PROHIBITED` risk classes.
 - Trusted human-in-the-loop authorization for controlled runtime changes,
   separated from untrusted MCP/agent requests.
 - Server-owned, single-use approval artifacts persisted in SQLite and bound
