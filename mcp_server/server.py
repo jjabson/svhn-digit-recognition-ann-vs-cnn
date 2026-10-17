@@ -2,11 +2,15 @@ import base64
 import binascii
 from uuid import uuid4
 import os
+import argparse
 
 from mcp_server.schemas import PredictionDecisionResult
 from src.orchestration.errors import InvalidInferenceInputError
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import (
+    TransportSecuritySettings,
+)
 from agent.approval_graph import build_approval_graph
 from config.inference_config import DEFAULT_INFERENCE_CONFIG
 from config.inference_config_service import InferenceConfigService
@@ -393,8 +397,81 @@ def get_confidence_threshold_approval_status(
 
 
 def main() -> None:
-    """Run the SVHN ML system MCP server."""
-    mcp.run()
+    """
+    Run the SVHN ML system MCP server.
+
+    Default transport remains stdio for local MCP consumers
+    such as Claude Code and VS Code.
+
+    Streamable HTTP may be selected for network MCP clients
+    such as n8n.
+    """
+    parser = argparse.ArgumentParser(
+        description="Run the SVHN MCP server."
+    )
+
+    parser.add_argument(
+        "--transport",
+        choices=[
+            "stdio",
+            "streamable-http",
+        ],
+        default="stdio",
+        help=(
+            "MCP transport. Default: stdio."
+        ),
+    )
+
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "Host for Streamable HTTP transport. "
+            "Default: 127.0.0.1."
+        ),
+    )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8001,
+        help=(
+            "Port for Streamable HTTP transport. "
+            "Default: 8001."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(
+            transport="stdio",
+        )
+        return
+
+    security = TransportSecuritySettings(
+        allowed_hosts=[
+            "127.0.0.1",
+            "127.0.0.1:*",
+            "localhost",
+            "localhost:*",
+            "host.docker.internal",
+            "host.docker.internal:*",
+        ],
+        allowed_origins=[
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://host.docker.internal:*",
+        ],
+    )
+
+    mcp.run(
+        transport="streamable-http",
+        host=args.host,
+        port=args.port,
+        streamable_http_path="/mcp",
+        transport_security=security,
+    )
 
 
 if __name__ == "__main__":
