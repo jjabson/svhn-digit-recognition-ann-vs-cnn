@@ -39,7 +39,7 @@ and controlled software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **273 automated tests** covering preprocessing, inference, orchestration,
+- **274 automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
 - Trusted human-in-the-loop authorization for controlled runtime changes,
@@ -814,7 +814,7 @@ python -m pytest -v
 Current milestone:
 
 ```text
-273 passed
+274 passed
 ```
 
 Both supported pytest invocation styles are verified:
