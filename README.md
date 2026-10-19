@@ -23,12 +23,13 @@ and controlled software architecture.
 - Improved from **67.36% ANN baseline → 74.84% improved ANN → 95.14% CNN**.
 - FastAPI/Uvicorn inference and evaluation API.
 - Model Context Protocol (MCP) server exposing reusable ML-system capabilities.
-- Independent MCP interoperability verified with **Claude Code** and
-  **VS Code/Copilot**.
+- Independent MCP interoperability verified with **Claude Code**,
+  **VS Code/Copilot**, and **n8n**.
+- MCP consumers verified over both **stdio** and **Streamable HTTP** transports.
+- n8n verified as both a direct no-code MCP consumer and an AI-agent-driven
+  MCP consumer.
 - Policy-driven inference orchestration with `ACCEPTED`, `UNCERTAIN`,
   and `FAILED` outcomes.
-- Application-owned action authorization with `READ_ONLY`, `CONTROLLED`,
-  and `PROHIBITED` risk classes.
 - Human-in-the-loop approval workflow for controlled runtime changes using
   LangGraph interrupt/resume semantics.
 - Typed Python domain models using dataclasses and Pydantic API contracts.
@@ -759,6 +760,49 @@ python -m tools.reliability.run_failure_analysis
 
 ---
 
+## Development Environment
+
+The project uses a repository-local Python virtual environment:
+
+```text
+svhn-digit-recognition-ann-vs-cnn/.venv
+```
+
+Create and install the environment with:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+python -m pip install -e .
+```
+
+The editable installation includes the project's application packages:
+
+```text
+src
+config
+mcp_server
+agent
+tools
+api
+```
+
+PyCharm is configured to use:
+
+```text
+<project-root>/.venv/bin/python
+```
+
+as the project interpreter so PyCharm execution, terminal sessions, pytest,
+FastAPI, MCP, LangGraph, and command-line tooling use the same Python
+environment.
+
+---
+
 ## Automated Testing
 
 Run the complete suite with:
@@ -770,7 +814,14 @@ python -m pytest -v
 Current milestone:
 
 ```text
-222 passed
+273 passed
+```
+
+Both supported pytest invocation styles are verified:
+
+```bash
+python -m pytest
+pytest
 ```
 
 Coverage includes:
@@ -806,6 +857,13 @@ Coverage includes:
 - graph reconstruction from persisted approval state;
 - process-restart configuration recovery;
 - process-restart pending-approval recovery.
+- trusted approval artifact persistence and verification;
+- single-use approval consumption and replay prevention;
+- MCP self-authorization prevention;
+- cross-process runtime configuration synchronization;
+- n8n direct no-code MCP interoperability;
+- n8n AI-agent MCP interoperability;
+- Streamable HTTP MCP transport.
 
 A real-model integration test exercises the path:
 
@@ -866,9 +924,21 @@ The interface was independently verified with:
 
 - **Claude Code**
 - **VS Code / Copilot Agent**
+- **n8n**
 
-Both consumers connected to the same local MCP server over `stdio` without
-depending on the project's internal LangGraph agent implementation.
+Claude Code and VS Code/Copilot connect through the local `stdio` MCP
+transport.
+
+n8n connects through the MCP server's **Streamable HTTP** transport:
+
+```text
+http://host.docker.internal:8001/mcp
+```
+
+when n8n is running inside Docker.
+
+These consumers use the same MCP capabilities without depending on the
+project's internal LangGraph conversational-agent implementation.
 
 ### MCP tools
 
@@ -918,6 +988,115 @@ historical performance context
     ↓
 external-agent explanation
 ```
+
+### n8n no-code and AI-agent interoperability
+
+n8n was independently verified as both a direct MCP consumer and an
+AI-agent-driven MCP consumer.
+
+The direct no-code workflow verified:
+
+```text
+Manual Trigger
+    ↓
+MCP Client
+    ↓
+get_inference_config()
+    ↓
+structured runtime configuration
+```
+
+and:
+
+```text
+Manual Trigger
+    ↓
+MCP Client
+    ↓
+get_digit_metrics(digit=7)
+    ↓
+structured historical evaluation metrics
+```
+
+The AI-agent workflow verified:
+
+```text
+Natural-language request
+    ↓
+n8n AI Agent
+    ↓
+LLM
+    ↓
+MCP Client Tool
+    ↓
+SVHN MCP Server
+    ↓
+tool selection and invocation
+    ↓
+structured result
+    ↓
+natural-language explanation
+```
+
+For digit `7`, the agent independently retrieved:
+
+```text
+precision = 97.70%
+recall    = 95.46%
+F1 score  = 96.56%
+support   = 2400
+```
+
+No SVHN-specific business logic was implemented inside n8n. The workflow
+consumes the same reusable MCP interface used by the other external clients.
+
+### n8n trusted-approval boundary verification
+
+The n8n AI Agent was also given access to the controlled
+`set_confidence_threshold` operation.
+
+The verified sequence was:
+
+```text
+active threshold = 0.95
+        ↓
+n8n requests 0.93
+        ↓
+approval_required
+        ↓
+n8n cannot self-approve
+        ↓
+active threshold remains 0.95
+        ↓
+trusted local human CLI approval
+        ↓
+controlled action executes
+        ↓
+active threshold = 0.93
+        ↓
+n8n observes executed state
+```
+
+The request remained bound to the same durable identifiers throughout the
+workflow:
+
+```text
+thread_id
+request_id
+```
+
+This independently verified that an AI-agent consumer may request and inspect
+a controlled action but cannot authorize it.
+
+A separate observation from this verification was that the LLM-generated
+natural-language summary incorrectly described one already-executed action as
+still awaiting external completion, even though the authoritative MCP response
+reported `status = executed` and the runtime configuration independently
+confirmed the new threshold.
+
+This reinforces the architectural rule that structured application/tool state
+is authoritative and LLM-generated interpretation is not.
+
 
 ### Trusted controlled-action interoperability
 
@@ -1121,25 +1300,28 @@ changes.
 
 ### Verification status
 
-| Capability | Claude Code | VS Code / Copilot |
-|---|---:|---:|
-| MCP connection | Passed | Passed |
-| Dynamic tool discovery | Passed | Passed |
-| Zero-argument invocation | Passed | Passed |
-| Parameterized invocation | Passed | Passed |
-| Image inference | Passed | Passed |
-| Evaluation-context retrieval | Passed | Passed |
-| Multi-tool synthesis | Passed | Passed |
-| Controlled-action request | — | Passed |
-| Pending approval inspection | — | Passed |
-| MCP self-authorization blocked | — | Passed |
-| Trusted human CLI approval | — | Passed |
-| Trusted human rejection | — | Passed |
-| Trusted artifact verification | — | Passed |
-| Controlled execution after trusted approval | — | Passed |
-| Process-restart workflow recovery | — | Passed |
-| Cross-process runtime synchronization | — | Passed |
-| Dependency on internal conversational agent | None | None |
+| Capability | Claude Code | VS Code / Copilot | n8n |
+|---|---:|---:|---:|
+| MCP connection | Passed | Passed | Passed |
+| `stdio` transport | Passed | Passed | — |
+| Streamable HTTP transport | — | — | Passed |
+| Dynamic tool discovery | Passed | Passed | Passed |
+| Zero-argument invocation | Passed | Passed | Passed |
+| Parameterized invocation | Passed | Passed | Passed |
+| Image inference | Passed | Passed | — |
+| Evaluation-context retrieval | Passed | Passed | Passed |
+| Multi-tool synthesis | Passed | Passed | Passed |
+| AI-agent tool selection | — | Passed | Passed |
+| Controlled-action request | — | Passed | Passed |
+| Pending approval inspection | — | Passed | Passed |
+| MCP self-authorization blocked | — | Passed | Passed |
+| Trusted human CLI approval | — | Passed | Passed |
+| Trusted human rejection | — | Passed | — |
+| Trusted artifact verification | — | Passed | Passed |
+| Controlled execution after trusted approval | — | Passed | Passed |
+| Process-restart workflow recovery | — | Passed | — |
+| Cross-process runtime synchronization | — | Passed | Passed |
+| Dependency on internal conversational agent | None | None | None |
 
 ---
 
@@ -1197,6 +1379,14 @@ The container launches the FastAPI application through Uvicorn on port
 │   ├── runtime_state.db              # Active runtime configuration
 │   ├── approval_checkpoints.db       # Durable LangGraph workflow state
 │   └── approval_artifacts.db         # Trusted human approval evidence
+│
+├── docs/
+│   └── mcp-verification/
+│       ├── claude/
+│       ├── vscode/
+│       └── n8n/
+│           ├── README.md
+│           └── n8n_full_workflow_verification.txt
 ```
 Persistent generated databases include:
 
@@ -1252,15 +1442,20 @@ Several design rules guide the evolution of the project:
 - Uvicorn
 - Pydantic
 - Model Context Protocol (MCP)
-- stdio MCP transport
+- MCP `stdio` transport
+- MCP Streamable HTTP transport
+- n8n
 - Pillow
+
 
 **Agent & Human-in-the-Loop**
 
 - LangGraph
 - interrupt / resume workflows
 - durable LangGraph SQLite checkpoints
+- trusted server-owned approval artifacts
 - application-owned action authorization
+- n8n AI Agent / MCP Client Tool interoperability
 
 **ML Engineering**
 
@@ -1306,33 +1501,57 @@ Several design rules guide the evolution of the project:
 - MCP integration testing
 - independent external-consumer verification with Claude Code
 - independent external-consumer verification with VS Code/Copilot
+- independent no-code consumer verification with n8n
+- n8n AI Agent + MCP Client Tool verification
 - dynamic MCP tool discovery over `stdio`
+- Streamable HTTP MCP transport
 - parameterized MCP tool invocation
 - end-to-end image inference with evaluation-context retrieval
 - multi-tool external-agent reasoning
 
-### Completed — Controlled Human-in-the-Loop Actions
+### Completed — Trusted Human-in-the-Loop Actions
 
 - application-owned action risk classification
 - `READ_ONLY`, `CONTROLLED`, and `PROHIBITED` action policy
-- immutable approval request and decision contracts
+- immutable approval request contracts
 - exact action/argument approval matching
 - centralized controlled-action executor
 - controlled confidence-threshold mutation
-- LangGraph interrupt/resume approval workflow
-- MCP-controlled action integration
-- approval and rejection verification
+- LangGraph interrupt/resume workflow
 - persistent inference runtime configuration
 - persistent LangGraph approval checkpoints
-- recovery of runtime configuration after Python-process restart
-- recovery and resume of pending approval workflows after process restart
+- server-owned trusted approval artifacts
+- exact request/action/argument binding
+- approval expiration handling
+- single-use authorization artifacts
+- replay prevention
+- MCP self-authorization prevention
+- trusted local human approval channel
+- approval and rejection verification
+- process-restart workflow recovery
+- cross-process runtime configuration synchronization
+- n8n trusted-approval boundary verification
 
-### Next — Trusted Human Approval Enforcement
+### Completed — Development Environment Normalization
 
-- strengthen the trust boundary around approval resolution
-- prevent autonomous MCP consumers from self-authorizing controlled actions
-- distinguish trusted human approval events from agent-generated approval claims
-- preserve application-owned authorization independent of client UI behavior
+- repository-local `.venv`
+- pinned direct runtime dependencies
+- pinned development dependencies
+- explicit SQLite LangGraph checkpoint dependency
+- editable application package installation
+- `api` and `tools` included in setuptools package discovery
+- PyCharm project interpreter aligned with repository `.venv`
+- both `pytest` and `python -m pytest` verified
+- **273 passing automated tests**
+
+### Next — Production Hardening
+
+- harden LangGraph checkpoint deserialization
+- strengthen production authentication and authorization boundaries
+- expand audit/event history
+- add inference decision and operational audit records
+- add latency, fallback, and orchestration observability
+
 
 ### Future
 
