@@ -44,8 +44,56 @@ from src.orchestration.trusted_approval import (
 from src.orchestration.trusted_approval_service import (
     DEFAULT_TRUSTED_APPROVAL_ISSUER,
 )
+from mcp_server.http_auth import (
+    McpHttpAuthConfig,
+    StaticBearerTokenVerifier,
+    create_auth_settings,
+)
 
-mcp = MCPServer("svhn-ml-system")
+MCP_HTTP_AUTH_CONFIG = (
+    McpHttpAuthConfig.from_environment()
+)
+
+
+def create_mcp_server() -> MCPServer:
+    if not MCP_HTTP_AUTH_CONFIG.enabled:
+        return MCPServer(
+            "svhn-ml-system",
+        )
+
+    assert (
+        MCP_HTTP_AUTH_CONFIG.bearer_token
+        is not None
+    )
+    assert (
+        MCP_HTTP_AUTH_CONFIG.resource_server_url
+        is not None
+    )
+
+    token_verifier = StaticBearerTokenVerifier(
+        expected_token=(
+            MCP_HTTP_AUTH_CONFIG.bearer_token
+        ),
+        resource_server_url=(
+            MCP_HTTP_AUTH_CONFIG
+            .resource_server_url
+        ),
+        required_scope=(
+            MCP_HTTP_AUTH_CONFIG
+            .required_scope
+        ),
+    )
+
+    return MCPServer(
+        "svhn-ml-system",
+        token_verifier=token_verifier,
+        auth=create_auth_settings(
+            MCP_HTTP_AUTH_CONFIG
+        ),
+    )
+
+
+mcp = create_mcp_server()
 
 RUNTIME_INSTANCE_ID = str(uuid4())
 
@@ -275,6 +323,10 @@ def set_confidence_threshold(
     It starts a human-approval workflow and returns approval context.
     """
 
+    validate_confidence_threshold_request(
+        confidence_threshold
+    )
+
     thread_id = f"threshold-{uuid4()}"
 
     config = {
@@ -396,6 +448,37 @@ def get_confidence_threshold_approval_status(
     }
 
 
+def validate_http_bind_security(
+    *,
+    host: str,
+    auth_enabled: bool,
+) -> None:
+    loopback_hosts = {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }
+
+    if (
+        host not in loopback_hosts
+        and not auth_enabled
+    ):
+        raise ValueError(
+            "Refusing to start unauthenticated "
+            "Streamable HTTP MCP server on "
+            f"non-loopback host {host!r}. "
+            "Enable MCP HTTP authentication "
+            "before using a network-reachable bind."
+        )
+
+def validate_confidence_threshold_request(
+    confidence_threshold: float,
+) -> None:
+    if not 0.0 <= confidence_threshold <= 1.0:
+        raise ToolError(
+            "confidence_threshold must be between 0.0 and 1.0 inclusive."
+        )
+
 def main() -> None:
     """
     Run the SVHN ML system MCP server.
@@ -448,6 +531,16 @@ def main() -> None:
             transport="stdio",
         )
         return
+
+    try:
+        validate_http_bind_security(
+            host=args.host,
+            auth_enabled=(
+                MCP_HTTP_AUTH_CONFIG.enabled
+            ),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     security = TransportSecuritySettings(
         allowed_hosts=[

@@ -157,3 +157,47 @@ def test_unknown_approval_thread_cannot_be_inspected():
                 "unknown-threshold-thread"
             )
         )
+
+
+@pytest.mark.parametrize(
+    "invalid_threshold",
+    [
+        -0.01,
+        1.01,
+        90.0,
+    ],
+)
+def test_mcp_rejects_invalid_threshold_before_approval(
+    invalid_threshold,
+):
+    with pytest.raises(
+        ToolError,
+        match=(
+            "confidence_threshold must be between "
+            "0.0 and 1.0 inclusive"
+        ),
+    ):
+        server.set_confidence_threshold(
+            invalid_threshold
+        )
+
+
+@pytest.mark.parametrize(
+    "valid_threshold",
+    [
+        0.0,
+        1.0,
+    ],
+)
+def test_mcp_accepts_threshold_boundaries(
+    valid_threshold,
+):
+    result = server.set_confidence_threshold(
+        valid_threshold
+    )
+
+    assert result["status"] == "approval_required"
+    assert (
+        result["arguments"]["confidence_threshold"]
+        == valid_threshold
+    )
