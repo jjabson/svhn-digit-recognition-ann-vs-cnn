@@ -40,7 +40,7 @@ def test_enabled_auth_requires_bearer_token():
 def test_auth_settings_require_expected_scope():
     config = McpHttpAuthConfig(
         enabled=True,
-        bearer_token="secret-token",
+        bearer_token="test-only-token-" + ("x" * 32),
         issuer_url="https://auth.example.test",
         resource_server_url=(
             "http://127.0.0.1:8001/mcp"
@@ -70,7 +70,7 @@ def test_auth_settings_require_expected_scope():
 
 def test_static_verifier_accepts_valid_token():
     verifier = StaticBearerTokenVerifier(
-        expected_token="secret-token",
+        expected_token="test-only-token-" + ("x" * 32),
         resource_server_url=(
             "http://127.0.0.1:8001/mcp"
         ),
@@ -79,7 +79,7 @@ def test_static_verifier_accepts_valid_token():
 
     access_token = asyncio.run(
         verifier.verify_token(
-            "secret-token"
+            "test-only-token-" + ("x" * 32)
         )
     )
 
@@ -143,3 +143,77 @@ def test_http_bind_security_rejects_unauthenticated_network_bind():
             host="0.0.0.0",
             auth_enabled=False,
         )
+
+
+def test_auth_config_repr_does_not_expose_bearer_token():
+    secret = "a" * 32
+
+    config = McpHttpAuthConfig(
+        enabled=True,
+        bearer_token=secret,
+        issuer_url="https://auth.example.test",
+        resource_server_url=(
+            "http://127.0.0.1:8001/mcp"
+        ),
+    )
+
+    rendered = repr(config)
+
+    assert secret not in rendered
+    assert "bearer_token" not in rendered
+
+
+@pytest.mark.parametrize(
+    "bearer_token",
+    [
+        "",
+        " ",
+        "short-token",
+    ],
+)
+def test_enabled_auth_rejects_missing_or_weak_bearer_token(
+    bearer_token,
+):
+    config = McpHttpAuthConfig(
+        enabled=True,
+        bearer_token=bearer_token,
+        issuer_url="https://auth.example.test",
+        resource_server_url=(
+            "http://127.0.0.1:8001/mcp"
+        ),
+    )
+
+    with pytest.raises(
+        McpHttpAuthConfigurationError
+    ):
+        config.validate()
+
+
+def test_auth_config_loads_from_environment(
+    monkeypatch,
+):
+    secret = "x" * 40
+
+    monkeypatch.setenv(
+        "SVHN_MCP_HTTP_AUTH_ENABLED",
+        "true",
+    )
+    monkeypatch.setenv(
+        "SVHN_MCP_BEARER_TOKEN",
+        secret,
+    )
+    monkeypatch.setenv(
+        "SVHN_MCP_AUTH_ISSUER_URL",
+        "https://auth.example.test",
+    )
+    monkeypatch.setenv(
+        "SVHN_MCP_RESOURCE_SERVER_URL",
+        "http://127.0.0.1:8001/mcp",
+    )
+
+    config = McpHttpAuthConfig.from_environment()
+
+    assert config.enabled is True
+    assert config.bearer_token == secret
+
+    assert secret not in repr(config)

@@ -4,6 +4,16 @@
 venv/
 env/
 
+# Local environment / secret configuration
+.env
+.env.*
+!.env.example
+
+# Local secret files
+*.secret
+*.secrets
+secrets/
+
 # Python caches
 __pycache__/
 *.py[cod]

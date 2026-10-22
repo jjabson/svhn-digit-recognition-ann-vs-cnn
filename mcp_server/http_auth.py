@@ -13,6 +13,7 @@ AUTH_ENABLED_ENV = "SVHN_MCP_HTTP_AUTH_ENABLED"
 BEARER_TOKEN_ENV = "SVHN_MCP_BEARER_TOKEN"
 AUTH_ISSUER_URL_ENV = "SVHN_MCP_AUTH_ISSUER_URL"
 RESOURCE_SERVER_URL_ENV = "SVHN_MCP_RESOURCE_SERVER_URL"
+MINIMUM_BEARER_TOKEN_LENGTH = 32
 
 DEFAULT_REQUIRED_SCOPE = "svhn:mcp"
 
@@ -57,10 +58,19 @@ class McpHttpAuthConfig:
         if not self.enabled:
             return
 
-        if not self.bearer_token:
+        if (
+                self.bearer_token is None
+                or not self.bearer_token.strip()
+        ):
             raise McpHttpAuthConfigurationError(
                 f"{BEARER_TOKEN_ENV} is required when "
                 f"{AUTH_ENABLED_ENV}=true."
+            )
+
+        if len(self.bearer_token) < MINIMUM_BEARER_TOKEN_LENGTH:
+            raise McpHttpAuthConfigurationError(
+                f"{BEARER_TOKEN_ENV} must contain at least "
+                f"{MINIMUM_BEARER_TOKEN_LENGTH} characters."
             )
 
         if not self.issuer_url:
