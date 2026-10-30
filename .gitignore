@@ -43,3 +43,4 @@ uv.lock
 generated/runtime_state.db
 generated/approval_checkpoints.db
 generated/approval_artifacts.db
+generated/audit_events.db
