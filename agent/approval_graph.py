@@ -23,13 +23,31 @@ from src.orchestration.trusted_approval import (
     TrustedApprovalVerificationError,
     TrustedApprovalVerifier,
 )
+from config.audit_event_store import AuditEventStore
+from src.orchestration.audit_event import (
+    AuditActorType,
+    AuditEvent,
+    AuditEventType,
+)
+from time import perf_counter
+
+from src.observability.controlled_action_metrics import (
+    ControlledActionMetricEvent,
+    ControlledActionMetrics,
+)
 
 
 class ApprovalGraphState(TypedDict, total=False):
     requested_threshold: float
     reason: str
 
+    thread_id: str
+    request_actor_type: str
+    request_source_component: str
+    request_actor_id: str | None
+
     approval_request: dict[str, Any]
+    approval_response: dict[str, Any]
 
     action_status: str
     action_result: dict[str, Any]
@@ -62,6 +80,8 @@ def build_approval_graph(
     artifact_store: ApprovalArtifactStore,
     trusted_approval_verifier: TrustedApprovalVerifier,
     checkpointer: BaseCheckpointSaver | None = None,
+    audit_store: AuditEventStore | None = None,
+    metrics: ControlledActionMetrics | None = None,
 ):
     """
     Build the durable controlled-action workflow.
@@ -78,15 +98,27 @@ def build_approval_graph(
         approval_artifact_store=artifact_store,
     )
 
+    audit_enabled = audit_store is not None
+
+    def get_request_actor_type(
+            state: ApprovalGraphState,
+    ) -> AuditActorType:
+        raw_actor_type = state.get(
+            "request_actor_type",
+            AuditActorType.SYSTEM.value,
+        )
+
+        return AuditActorType(raw_actor_type)
+
     def prepare_request(
-        state: ApprovalGraphState,
+            state: ApprovalGraphState,
     ) -> dict[str, Any]:
         request = ApprovalRequest(
             action_name="set_confidence_threshold",
             arguments={
-                "confidence_threshold": (
-                    state["requested_threshold"]
-                ),
+                "confidence_threshold": state[
+                    "requested_threshold"
+                ],
             },
             reason=state.get(
                 "reason",
@@ -94,11 +126,92 @@ def build_approval_graph(
             ),
         )
 
+        if metrics is not None:
+            metrics.record(
+                ControlledActionMetricEvent.REQUESTED
+            )
+
+        if audit_enabled:
+            audit_store.append(
+                AuditEvent.create(
+                    event_type=(
+                        AuditEventType
+                        .CONTROLLED_ACTION_REQUESTED
+                    ),
+                    actor_type=get_request_actor_type(
+                        state
+                    ),
+                    actor_id=state.get(
+                        "request_actor_id"
+                    ),
+                    source_component=state.get(
+                        "request_source_component",
+                        "approval_graph",
+                    ),
+                    request_id=request.request_id,
+                    thread_id=state.get("thread_id"),
+                    payload={
+                        "action_name": (
+                            request.action_name
+                        ),
+                        "arguments": dict(
+                            request.arguments
+                        ),
+                        "reason": request.reason,
+                    },
+                )
+            )
+
         return {
             "approval_request": _request_to_dict(
                 request
             ),
         }
+
+    def record_approval_required(
+            state: ApprovalGraphState,
+    ) -> dict[str, Any]:
+        request_data = state["approval_request"]
+
+        if metrics is not None:
+            metrics.record(
+                ControlledActionMetricEvent.APPROVAL_REQUIRED
+            )
+
+        if audit_enabled:
+            current_config = (
+                config_service.get_config()
+            )
+
+            audit_store.append(
+                AuditEvent.create(
+                    event_type=(
+                        AuditEventType.APPROVAL_REQUIRED
+                    ),
+                    actor_type=AuditActorType.SYSTEM,
+                    source_component="approval_graph",
+                    request_id=request_data[
+                        "request_id"
+                    ],
+                    thread_id=state.get(
+                        "thread_id"
+                    ),
+                    payload={
+                        "action_name": request_data[
+                            "action_name"
+                        ],
+                        "arguments": request_data[
+                            "arguments"
+                        ],
+                        "current_confidence_threshold": (
+                            current_config
+                            .confidence_threshold
+                        ),
+                    },
+                )
+            )
+
+        return {}
 
     def approval_gate(
         state: ApprovalGraphState,
@@ -146,12 +259,19 @@ def build_approval_graph(
             state["approval_request"]
         )
 
+        started_at = perf_counter()
+
         try:
             verified_approval = (
                 trusted_approval_verifier.verify(
                     request
                 )
             )
+
+            if metrics is not None:
+                metrics.record(
+                    ControlledActionMetricEvent.APPROVED
+                )
 
             updated_config = (
                 executor.execute_trusted(
@@ -171,6 +291,11 @@ def build_approval_graph(
             )
 
         except ApprovalRejectedError:
+            if metrics is not None:
+                metrics.record(
+                    ControlledActionMetricEvent.REJECTED
+                )
+
             return {
                 "action_status": "rejected",
                 "action_result": {
@@ -183,6 +308,11 @@ def build_approval_graph(
             }
 
         except TrustedApprovalVerificationError as exc:
+            if metrics is not None:
+                metrics.record(
+                    ControlledActionMetricEvent.DENIED
+                )
+
             return {
                 "action_status": "denied",
                 "action_result": {
@@ -194,6 +324,91 @@ def build_approval_graph(
                     "reason": str(exc),
                 },
             }
+
+        except Exception as exc:
+            duration_ms = (
+                                  perf_counter() - started_at
+                          ) * 1000.0
+
+            if metrics is not None:
+                metrics.record(
+                    ControlledActionMetricEvent.FAILED,
+                    duration_ms=duration_ms,
+                )
+
+            if audit_enabled:
+                audit_store.append(
+                    AuditEvent.create(
+                        event_type=(
+                            AuditEventType
+                            .CONTROLLED_ACTION_FAILED
+                        ),
+                        actor_type=(
+                            AuditActorType.SYSTEM
+                        ),
+                        source_component=(
+                            "approval_graph"
+                        ),
+                        request_id=request.request_id,
+                        thread_id=state.get(
+                            "thread_id"
+                        ),
+                        payload={
+                            "action_name": (
+                                request.action_name
+                            ),
+                            "arguments": dict(
+                                request.arguments
+                            ),
+                            "error_type": (
+                                type(exc).__name__
+                            ),
+                            "error_message": str(exc),
+                        },
+                    )
+                )
+
+            raise
+
+        duration_ms = (
+                              perf_counter() - started_at
+                      ) * 1000.0
+
+        if metrics is not None:
+            metrics.record(
+                ControlledActionMetricEvent.EXECUTED,
+                duration_ms=duration_ms,
+            )
+
+        if audit_enabled:
+            audit_store.append(
+                AuditEvent.create(
+                    event_type=(
+                        AuditEventType
+                        .CONTROLLED_ACTION_EXECUTED
+                    ),
+                    actor_type=AuditActorType.SYSTEM,
+                    source_component="approval_graph",
+                    request_id=request.request_id,
+                    thread_id=state.get(
+                        "thread_id"
+                    ),
+                    payload={
+                        "action_name": (
+                            request.action_name
+                        ),
+                        "arguments": dict(
+                            request.arguments
+                        ),
+                        "result": {
+                            "confidence_threshold": (
+                                updated_config
+                                .confidence_threshold
+                            ),
+                        },
+                    },
+                )
+            )
 
         return {
             "action_status": "executed",
@@ -231,6 +446,11 @@ def build_approval_graph(
 
     builder.add_edge(
         "prepare_request",
+        "record_approval_required",
+    )
+
+    builder.add_edge(
+        "record_approval_required",
         "approval_gate",
     )
 
@@ -242,6 +462,10 @@ def build_approval_graph(
     builder.add_edge(
         "execute_controlled_action",
         END,
+    )
+    builder.add_node(
+        "record_approval_required",
+        record_approval_required,
     )
 
     if checkpointer is None:

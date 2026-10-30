@@ -21,9 +21,11 @@ from config.approval_checkpoint import (
 
 from mcp_server.schemas import (
     ClassMetricsResult,
+    ControlledActionMetricsResult,
     EvaluationInsightsResult,
     EvaluationSummaryResult,
     InferenceConfigResult,
+    InferenceMetricsResult,
     ModelSummaryResult,
 )
 from src.orchestration.service_factory import (
@@ -48,6 +50,16 @@ from mcp_server.http_auth import (
     McpHttpAuthConfig,
     StaticBearerTokenVerifier,
     create_auth_settings,
+)
+from config.audit_event_store import (
+    AuditEventStore,
+)
+from src.orchestration.audit_event import (
+    AuditActorType,
+)
+from src.observability.metrics import InferenceMetrics
+from src.observability.controlled_action_metrics import (
+    ControlledActionMetrics,
 )
 
 MCP_HTTP_AUTH_CONFIG = (
@@ -97,6 +109,12 @@ mcp = create_mcp_server()
 
 RUNTIME_INSTANCE_ID = str(uuid4())
 
+inference_metrics = InferenceMetrics()
+
+controlled_action_metrics = (
+    ControlledActionMetrics()
+)
+
 inference_config_store = InferenceConfigStore()
 
 inference_config_service = InferenceConfigService(
@@ -106,11 +124,14 @@ inference_config_service = InferenceConfigService(
 
 inference_service = create_orchestrated_inference_service(
     config_service=inference_config_service,
+    metrics=inference_metrics,
 )
 
 approval_checkpointer = create_approval_checkpointer()
 
 approval_artifact_store = ApprovalArtifactStore()
+
+audit_event_store = AuditEventStore()
 
 trusted_approval_verifier = TrustedApprovalVerifier(
     approval_artifact_store,
@@ -124,6 +145,7 @@ approval_graph = build_approval_graph(
     artifact_store=approval_artifact_store,
     trusted_approval_verifier=trusted_approval_verifier,
     checkpointer=approval_checkpointer,
+    metrics=controlled_action_metrics,
 )
 
 @mcp.tool(
@@ -339,8 +361,17 @@ def set_confidence_threshold(
         {
             "requested_threshold": confidence_threshold,
             "reason": (
-                "MCP request to change inference confidence threshold"
+                "MCP request to change inference "
+                "confidence threshold"
             ),
+            "thread_id": thread_id,
+            "request_actor_type": (
+                AuditActorType.MCP_CLIENT.value
+            ),
+            "request_source_component": (
+                "mcp_server"
+            ),
+            "request_actor_id": None,
         },
         config=config,
     )
@@ -446,6 +477,73 @@ def get_confidence_threshold_approval_status(
             .confidence_threshold
         ),
     }
+
+@mcp.tool(
+    name="get_inference_metrics",
+    description=(
+        "Return process-local operational metrics for "
+        "orchestrated inference."
+    ),
+    structured_output=True,
+)
+def get_inference_metrics() -> InferenceMetricsResult:
+    """
+    Return the current process-local inference metrics snapshot.
+
+    These metrics are observational only and reset when the
+    MCP server process restarts.
+    """
+    snapshot = inference_metrics.snapshot()
+
+    return InferenceMetricsResult(
+        total_attempts=snapshot.total_attempts,
+        accepted=snapshot.accepted,
+        uncertain=snapshot.uncertain,
+        failed=snapshot.failed,
+        total_latency_ms=snapshot.total_latency_ms,
+        average_latency_ms=snapshot.average_latency_ms,
+        max_latency_ms=snapshot.max_latency_ms,
+    )
+
+@mcp.tool(
+    name="get_controlled_action_metrics",
+    description=(
+        "Return process-local operational metrics for "
+        "controlled-action workflows."
+    ),
+    structured_output=True,
+)
+def get_controlled_action_metrics() -> ControlledActionMetricsResult:
+    """
+    Return the current process-local controlled-action metrics
+    snapshot.
+
+    These metrics are observational only and reset when the
+    MCP server process restarts.
+    """
+    snapshot = controlled_action_metrics.snapshot()
+
+    return ControlledActionMetricsResult(
+        requested=snapshot.requested,
+        approval_required=snapshot.approval_required,
+        approved=snapshot.approved,
+        rejected=snapshot.rejected,
+        denied=snapshot.denied,
+        executed=snapshot.executed,
+        failed=snapshot.failed,
+        execution_latency_count=(
+            snapshot.execution_latency_count
+        ),
+        total_execution_latency_ms=(
+            snapshot.total_execution_latency_ms
+        ),
+        average_execution_latency_ms=(
+            snapshot.average_execution_latency_ms
+        ),
+        max_execution_latency_ms=(
+            snapshot.max_execution_latency_ms
+        ),
+    )
 
 
 def validate_http_bind_security(

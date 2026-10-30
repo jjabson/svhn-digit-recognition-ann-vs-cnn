@@ -10,6 +10,45 @@ class InferenceConfigResult:
     model_name: str
     confidence_threshold: float
 
+
+@dataclass(frozen=True)
+class InferenceMetricsResult:
+    """
+    MCP result contract for process-local inference
+    operational metrics.
+    """
+
+    total_attempts: int
+    accepted: int
+    uncertain: int
+    failed: int
+
+    total_latency_ms: float
+    average_latency_ms: float
+    max_latency_ms: float
+
+
+@dataclass(frozen=True)
+class ControlledActionMetricsResult:
+    """
+    MCP result contract for process-local controlled-action
+    operational metrics.
+    """
+
+    requested: int
+    approval_required: int
+    approved: int
+    rejected: int
+    denied: int
+    executed: int
+    failed: int
+
+    execution_latency_count: int
+    total_execution_latency_ms: float
+    average_execution_latency_ms: float
+    max_execution_latency_ms: float
+
+
 @dataclass(frozen=True)
 class EvaluationSummaryResult:
     """

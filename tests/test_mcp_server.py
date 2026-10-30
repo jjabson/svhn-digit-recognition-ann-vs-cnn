@@ -65,6 +65,8 @@ def test_mcp_tool_discovery() -> None:
         "set_confidence_threshold",
         "get_confidence_threshold_approval_status",
         "get_runtime_debug",
+        "get_inference_metrics",
+        "get_controlled_action_metrics",
     }
 
     digit_metrics = tools_by_name["get_digit_metrics"]
@@ -197,6 +199,82 @@ def test_mcp_read_only_tools() -> None:
             "total_parameters": 164362,
             "number_of_layers": 17,
         }
+
+        inference_metrics_result = await session.call_tool(
+            "get_inference_metrics",
+            arguments={},
+        )
+
+        assert inference_metrics_result.is_error is False
+
+        inference_metrics_data = (
+            inference_metrics_result.structured_content
+        )
+
+        assert inference_metrics_data["total_attempts"] >= 0
+        assert inference_metrics_data["accepted"] >= 0
+        assert inference_metrics_data["uncertain"] >= 0
+        assert inference_metrics_data["failed"] >= 0
+
+        assert (
+                inference_metrics_data["accepted"]
+                + inference_metrics_data["uncertain"]
+                + inference_metrics_data["failed"]
+                == inference_metrics_data["total_attempts"]
+        )
+
+        assert inference_metrics_data["total_latency_ms"] >= 0.0
+        assert inference_metrics_data["average_latency_ms"] >= 0.0
+        assert inference_metrics_data["max_latency_ms"] >= 0.0
+
+        controlled_metrics_result = await session.call_tool(
+            "get_controlled_action_metrics",
+            arguments={},
+        )
+
+        assert controlled_metrics_result.is_error is False
+
+        controlled_metrics_data = (
+            controlled_metrics_result.structured_content
+        )
+
+        assert controlled_metrics_data["requested"] >= 0
+        assert controlled_metrics_data["approval_required"] >= 0
+        assert controlled_metrics_data["approved"] >= 0
+        assert controlled_metrics_data["rejected"] >= 0
+        assert controlled_metrics_data["denied"] >= 0
+        assert controlled_metrics_data["executed"] >= 0
+        assert controlled_metrics_data["failed"] >= 0
+
+        assert (
+                controlled_metrics_data[
+                    "execution_latency_count"
+                ]
+                ==
+                controlled_metrics_data["executed"]
+                + controlled_metrics_data["failed"]
+        )
+
+        assert (
+                controlled_metrics_data[
+                    "total_execution_latency_ms"
+                ]
+                >= 0.0
+        )
+
+        assert (
+                controlled_metrics_data[
+                    "average_execution_latency_ms"
+                ]
+                >= 0.0
+        )
+
+        assert (
+                controlled_metrics_data[
+                    "max_execution_latency_ms"
+                ]
+                >= 0.0
+        )
 
     asyncio.run(
         run_with_mcp_session(check_read_only_tools)

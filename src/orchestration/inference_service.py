@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from time import perf_counter
 
 from config.inference_config_service import InferenceConfigService
 from src.inference import SVHNPredictor
+from src.observability.metrics import InferenceMetrics
 from src.orchestration.adapters import create_svhn_predict_fn
 from src.orchestration.service import run_orchestrated_inference
 from src.schemas.orchestration import (
@@ -25,6 +27,7 @@ class OrchestratedInferenceService:
 
     predictor: SVHNPredictor
     config_service: InferenceConfigService
+    metrics: InferenceMetrics | None = None
 
     @property
     def model_name(self) -> str:
@@ -63,9 +66,11 @@ class OrchestratedInferenceService:
         return get_model_architecture(self.predictor.model)
 
     def predict(
-        self,
-        image_bytes: bytes,
+            self,
+            image_bytes: bytes,
     ) -> InferenceDecision:
+        started_at = perf_counter()
+
         config = self.config_service.get_config()
 
         policy = InferencePolicy(
@@ -77,8 +82,25 @@ class OrchestratedInferenceService:
             image_bytes=image_bytes,
         )
 
-        return run_orchestrated_inference(
+        decision = run_orchestrated_inference(
             primary_model_name=config.model_name,
             primary_predict_fn=predict_fn,
             policy=policy,
         )
+
+        if self.metrics is not None:
+            duration_ms = (
+                                  perf_counter() - started_at
+                          ) * 1000.0
+
+            status = decision.status
+
+            if hasattr(status, "value"):
+                status = status.value
+
+            self.metrics.record(
+                status=str(status),
+                duration_ms=duration_ms,
+            )
+
+        return decision

@@ -1,4 +1,4 @@
-from config.inference_config import DEFAULT_INFERENCE_CONFIG
+from config.inference_config_service import InferenceConfigService
 
 from src.orchestration.inference_service import OrchestratedInferenceService
 from src.orchestration.service_factory import (
@@ -9,6 +9,8 @@ from config.inference_config import (
     DEFAULT_INFERENCE_CONFIG,
     InferenceConfig,
 )
+
+from src.observability.metrics import InferenceMetrics
 
 def test_service_factory_creates_canonical_inference_service(
     monkeypatch,
@@ -69,3 +71,56 @@ def test_service_factory_accepts_custom_inference_config(
     )
 
     assert service.model_name == "test-model"
+
+
+def test_service_factory_injects_metrics(
+    monkeypatch,
+):
+    class FakePredictor:
+        pass
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    config_service = InferenceConfigService(
+        InferenceConfig(
+            model_name="cnn",
+            confidence_threshold=0.90,
+        )
+    )
+
+    metrics = InferenceMetrics()
+
+    service = create_orchestrated_inference_service(
+        config_service=config_service,
+        metrics=metrics,
+    )
+
+    assert service.metrics is metrics
+    assert service.config_service is config_service
+
+def test_service_factory_allows_metrics_to_be_omitted(
+    monkeypatch,
+):
+    class FakePredictor:
+        pass
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    config_service = InferenceConfigService(
+        InferenceConfig(
+            model_name="cnn",
+            confidence_threshold=0.90,
+        )
+    )
+
+    service = create_orchestrated_inference_service(
+        config_service=config_service,
+    )
+
+    assert service.metrics is None
