@@ -35,7 +35,7 @@ def test_orchestrated_prediction_endpoint_returns_decision(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: FakeOrchestratedInferenceService(),
+        lambda *, metrics=None: FakeOrchestratedInferenceService(),
     )
 
     with TestClient(api_module.app) as client:
@@ -70,7 +70,7 @@ def test_orchestrated_prediction_rejects_unsupported_content_type(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: FakeOrchestratedInferenceService(),
+        lambda *, metrics=None: FakeOrchestratedInferenceService(),
     )
 
     with TestClient(api_module.app) as client:
@@ -112,7 +112,7 @@ def test_orchestrated_prediction_returns_failed_model_decision(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: FailedInferenceService(),
+        lambda *, metrics=None: FailedInferenceService(),
     )
 
     with TestClient(api_module.app) as client:
@@ -149,7 +149,7 @@ def test_orchestrated_prediction_rejects_invalid_image_input(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: InvalidInputService(),
+        lambda *, metrics=None: InvalidInputService(),
     )
 
     with TestClient(api_module.app) as client:

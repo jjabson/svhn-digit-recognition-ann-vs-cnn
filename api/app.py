@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from src.orchestration.errors import InvalidInferenceInputError
+from src.observability.metrics import InferenceMetrics
 
 from src.orchestration.inference_service import (
     OrchestratedInferenceService,
@@ -42,19 +43,27 @@ from src.schemas.model import (
 )
 
 from tools.model.model_service import get_model_architecture
+from src.schemas.observability import InferenceMetricsResponse
 
 inference_service: OrchestratedInferenceService | None = None
+inference_metrics: InferenceMetrics | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global inference_service
+    global inference_metrics
 
-    inference_service = create_orchestrated_inference_service()
+    inference_metrics = InferenceMetrics()
+
+    inference_service = create_orchestrated_inference_service(
+        metrics=inference_metrics,
+    )
 
     yield
 
     inference_service = None
+    inference_metrics = None
 
 
 app = FastAPI(
@@ -79,6 +88,13 @@ app = FastAPI(
             "name": "Prediction",
             "description": (
                 "Run CNN inference on uploaded digit images."
+            ),
+        },
+        {
+            "name": "Observability",
+            "description": (
+                "Inspect process-local operational metrics "
+                "for the running API instance."
             ),
         },
         {
@@ -110,6 +126,35 @@ def root():
 def health()-> dict[str, str]:
     return {"status": "healthy"}
 
+@app.get(
+    "/observability/inference",
+    response_model=InferenceMetricsResponse,
+    tags=["Observability"],
+    summary="Get inference metrics",
+    description=(
+        "Returns process-local operational metrics for "
+        "orchestrated inference. Metrics reset when the "
+        "API process restarts."
+    ),
+)
+def get_inference_metrics() -> InferenceMetricsResponse:
+    if inference_metrics is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Inference metrics are unavailable.",
+        )
+
+    snapshot = inference_metrics.snapshot()
+
+    return InferenceMetricsResponse(
+        total_attempts=snapshot.total_attempts,
+        accepted=snapshot.accepted,
+        uncertain=snapshot.uncertain,
+        failed=snapshot.failed,
+        total_latency_ms=snapshot.total_latency_ms,
+        average_latency_ms=snapshot.average_latency_ms,
+        max_latency_ms=snapshot.max_latency_ms,
+    )
 
 @app.post(
     "/predict",

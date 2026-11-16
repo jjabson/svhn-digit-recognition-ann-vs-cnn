@@ -30,7 +30,7 @@ def test_inference_config_endpoint_returns_serving_metadata(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: service,
+        lambda *, metrics=None: service,
     )
 
     with TestClient(api_module.app) as client:
@@ -50,7 +50,7 @@ def test_inference_config_endpoint_returns_503_when_service_unavailable(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda: None,
+        lambda *, metrics=None: None,
     )
 
     with TestClient(api_module.app) as client:
