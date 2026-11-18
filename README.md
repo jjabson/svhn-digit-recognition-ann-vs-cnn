@@ -39,7 +39,7 @@ and controlled software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- - **401 passing automated tests** covering preprocessing, inference, orchestration,
+- **401 passing automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
 - Trusted human-in-the-loop authorization for controlled runtime changes,
