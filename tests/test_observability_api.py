@@ -40,10 +40,13 @@ def test_inference_metrics_endpoint_returns_process_local_snapshot():
         api_module.inference_metrics.record(
             status="ACCEPTED",
             duration_ms=10.0,
+            fallback_used=False,
         )
+
         api_module.inference_metrics.record(
             status="UNCERTAIN",
             duration_ms=30.0,
+            fallback_used=True,
         )
 
         response = client.get(
@@ -57,6 +60,8 @@ def test_inference_metrics_endpoint_returns_process_local_snapshot():
             "accepted": 1,
             "uncertain": 1,
             "failed": 0,
+            "fallback_used_count": 1,
+            "fallback_rate": 0.5,
             "total_latency_ms": 40.0,
             "average_latency_ms": 20.0,
             "max_latency_ms": 30.0,
@@ -149,3 +154,5 @@ def test_inference_metrics_endpoint_reflects_orchestrated_prediction(
     assert body["total_latency_ms"] == 12.5
     assert body["average_latency_ms"] == 12.5
     assert body["max_latency_ms"] == 12.5
+    assert body["fallback_used_count"] == 0
+    assert body["fallback_rate"] == 0.0

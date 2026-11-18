@@ -23,6 +23,9 @@ class InferenceMetricsResult:
     uncertain: int
     failed: int
 
+    fallback_used_count: int
+    fallback_rate: float
+
     total_latency_ms: float
     average_latency_ms: float
     max_latency_ms: float

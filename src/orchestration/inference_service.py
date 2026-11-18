@@ -101,6 +101,7 @@ class OrchestratedInferenceService:
             self.metrics.record(
                 status=str(status),
                 duration_ms=duration_ms,
+                fallback_used=decision.fallback_used,
             )
 
         return decision

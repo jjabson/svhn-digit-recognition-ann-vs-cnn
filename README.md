@@ -39,7 +39,7 @@ and controlled software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **274 automated tests** covering preprocessing, inference, orchestration,
+- - **401 passing automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
 - Trusted human-in-the-loop authorization for controlled runtime changes,
@@ -1493,6 +1493,10 @@ Several design rules guide the evolution of the project:
 - calibration analysis
 - reliability-observation persistence
 - deterministic failure and fallback reliability evaluation
+- process-local inference latency and outcome metrics
+- fallback usage count and fallback-rate observability
+- FastAPI inference observability endpoint
+- MCP inference and controlled-action observability tools
 
 ### Completed — MCP & Agent Interoperability
 
@@ -1542,23 +1546,22 @@ Several design rules guide the evolution of the project:
 - `api` and `tools` included in setuptools package discovery
 - PyCharm project interpreter aligned with repository `.venv`
 - both `pytest` and `python -m pytest` verified
-- **273 passing automated tests**
+- - **401 passing automated tests**
 
 ### Next — Production Hardening
 
-- harden LangGraph checkpoint deserialization
-- strengthen production authentication and authorization boundaries
-- expand audit/event history
-- add inference decision and operational audit records
-- add latency, fallback, and orchestration observability
+- continue strengthening production authentication and authorization boundaries
+- expand durable audit/event history
+- deepen inference decision and operational audit records
+- extend production fallback execution and runtime resilience
+- strengthen multi-process/runtime coordination
 
 
 ### Future
 
-- durable approval/audit event history
-- inference decision/audit records
-- latency and fallback metrics
-- orchestration observability
+- expanded durable approval/audit event history
+- deeper inference decision/audit records
+- production fallback-model execution
 - additional controlled runtime actions
 - stronger multi-process/runtime coordination
 - production-grade authentication and authorization boundaries

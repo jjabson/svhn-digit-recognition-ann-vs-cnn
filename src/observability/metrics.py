@@ -14,10 +14,21 @@ class InferenceMetricsSnapshot:
     accepted: int
     uncertain: int
     failed: int
+    fallback_used_count: int
 
     total_latency_ms: float
     average_latency_ms: float
     max_latency_ms: float
+
+    @property
+    def fallback_rate(self) -> float:
+        if self.total_attempts == 0:
+            return 0.0
+
+        return (
+                self.fallback_used_count
+                / self.total_attempts
+        )
 
     def __post_init__(self) -> None:
         integer_values = (
@@ -25,6 +36,7 @@ class InferenceMetricsSnapshot:
             self.accepted,
             self.uncertain,
             self.failed,
+            self.fallback_used_count,
         )
 
         if any(value < 0 for value in integer_values):
@@ -59,6 +71,12 @@ class InferenceMetricsSnapshot:
                 "total_attempts."
             )
 
+        if self.fallback_used_count > self.total_attempts:
+            raise InferenceMetricsError(
+                "fallback_used_count must not exceed "
+                "total_attempts."
+            )
+
 
 class InferenceMetrics:
     """
@@ -76,15 +94,17 @@ class InferenceMetrics:
         self._accepted = 0
         self._uncertain = 0
         self._failed = 0
+        self._fallback_used_count = 0
 
         self._total_latency_ms = 0.0
         self._max_latency_ms = 0.0
 
     def record(
-        self,
-        *,
-        status: str,
-        duration_ms: float,
+            self,
+            *,
+            status: str,
+            duration_ms: float,
+            fallback_used: bool = False,
     ) -> None:
         if duration_ms < 0:
             raise InferenceMetricsError(
@@ -101,6 +121,11 @@ class InferenceMetrics:
             raise InferenceMetricsError(
                 "Unsupported inference status: "
                 f"{status}"
+            )
+
+        if not isinstance(fallback_used, bool):
+            raise InferenceMetricsError(
+                "fallback_used must be a boolean."
             )
 
         with self._lock:
@@ -121,6 +146,8 @@ class InferenceMetrics:
                 self._max_latency_ms,
                 duration_ms,
             )
+            if fallback_used:
+                self._fallback_used_count += 1
 
     def snapshot(
         self,
@@ -141,6 +168,9 @@ class InferenceMetrics:
                 accepted=self._accepted,
                 uncertain=self._uncertain,
                 failed=self._failed,
+                fallback_used_count=(
+                    self._fallback_used_count
+                ),
                 total_latency_ms=(
                     self._total_latency_ms
                 ),

@@ -237,7 +237,8 @@ def test_service_records_failed_metrics(
     failed_decision = SimpleNamespace(
         status=SimpleNamespace(
             value="failed"
-        )
+        ),
+        fallback_used=False,
     )
 
     def fake_run_orchestrated_inference(
@@ -277,3 +278,51 @@ def test_service_records_failed_metrics(
 
     assert snapshot.total_latency_ms >= 0.0
     assert snapshot.max_latency_ms >= 0.0
+
+
+def test_service_records_fallback_usage(
+    monkeypatch,
+):
+    metrics = InferenceMetrics()
+
+    fallback_decision = SimpleNamespace(
+        status=SimpleNamespace(
+            value="accepted"
+        ),
+        fallback_used=True,
+    )
+
+    def fake_run_orchestrated_inference(
+        **kwargs,
+    ):
+        return fallback_decision
+
+    monkeypatch.setattr(
+        inference_service_module,
+        "run_orchestrated_inference",
+        fake_run_orchestrated_inference,
+    )
+
+    service = OrchestratedInferenceService(
+        predictor=object(),
+        config_service=InferenceConfigService(
+            InferenceConfig(
+                model_name="cnn",
+                confidence_threshold=0.90,
+            )
+        ),
+        metrics=metrics,
+    )
+
+    decision = service.predict(
+        b"valid-image"
+    )
+
+    snapshot = metrics.snapshot()
+
+    assert decision.fallback_used is True
+
+    assert snapshot.total_attempts == 1
+    assert snapshot.accepted == 1
+    assert snapshot.fallback_used_count == 1
+    assert snapshot.fallback_rate == 1.0

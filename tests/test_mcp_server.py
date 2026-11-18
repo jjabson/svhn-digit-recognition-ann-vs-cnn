@@ -216,11 +216,20 @@ def test_mcp_read_only_tools() -> None:
         assert inference_metrics_data["uncertain"] >= 0
         assert inference_metrics_data["failed"] >= 0
 
+        assert inference_metrics_data["fallback_used_count"] >= 0
+        assert inference_metrics_data["fallback_rate"] >= 0.0
+        assert inference_metrics_data["fallback_rate"] <= 1.0
+
         assert (
                 inference_metrics_data["accepted"]
                 + inference_metrics_data["uncertain"]
                 + inference_metrics_data["failed"]
                 == inference_metrics_data["total_attempts"]
+        )
+
+        assert (
+                inference_metrics_data["fallback_used_count"]
+                <= inference_metrics_data["total_attempts"]
         )
 
         assert inference_metrics_data["total_latency_ms"] >= 0.0

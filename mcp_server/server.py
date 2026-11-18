@@ -500,6 +500,8 @@ def get_inference_metrics() -> InferenceMetricsResult:
         accepted=snapshot.accepted,
         uncertain=snapshot.uncertain,
         failed=snapshot.failed,
+        fallback_used_count=snapshot.fallback_used_count,
+        fallback_rate=snapshot.fallback_rate,
         total_latency_ms=snapshot.total_latency_ms,
         average_latency_ms=snapshot.average_latency_ms,
         max_latency_ms=snapshot.max_latency_ms,

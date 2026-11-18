@@ -175,6 +175,7 @@ def test_snapshot_rejects_counter_mismatch():
             accepted=1,
             uncertain=1,
             failed=0,
+            fallback_used_count=0,
             total_latency_ms=10.0,
             average_latency_ms=(
                 10.0 / 3.0
@@ -193,6 +194,7 @@ def test_snapshot_rejects_negative_counter():
             accepted=0,
             uncertain=0,
             failed=0,
+            fallback_used_count=0,
             total_latency_ms=0.0,
             average_latency_ms=0.0,
             max_latency_ms=0.0,
@@ -230,3 +232,70 @@ def test_concurrent_recording_is_thread_safe():
     assert snapshot.total_latency_ms == 1000.0
     assert snapshot.average_latency_ms == 1.0
     assert snapshot.max_latency_ms == 1.0
+
+
+def test_new_metrics_snapshot_has_zero_fallback_usage():
+    metrics = InferenceMetrics()
+
+    snapshot = metrics.snapshot()
+
+    assert snapshot.fallback_used_count == 0
+    assert snapshot.fallback_rate == 0.0
+
+
+def test_record_tracks_fallback_usage():
+    metrics = InferenceMetrics()
+
+    metrics.record(
+        status="ACCEPTED",
+        duration_ms=10.0,
+        fallback_used=False,
+    )
+
+    metrics.record(
+        status="UNCERTAIN",
+        duration_ms=20.0,
+        fallback_used=True,
+    )
+
+    snapshot = metrics.snapshot()
+
+    assert snapshot.total_attempts == 2
+    assert snapshot.fallback_used_count == 1
+    assert snapshot.fallback_rate == 0.5
+
+
+def test_record_rejects_non_boolean_fallback_used():
+    metrics = InferenceMetrics()
+
+    with pytest.raises(
+        InferenceMetricsError,
+        match="fallback_used must be a boolean",
+    ):
+        metrics.record(
+            status="ACCEPTED",
+            duration_ms=10.0,
+            fallback_used=1,
+        )
+
+
+def test_snapshot_rejects_fallback_count_greater_than_attempts():
+    with pytest.raises(
+        InferenceMetricsError,
+        match=(
+            "fallback_used_count must not exceed "
+            "total_attempts"
+        ),
+    ):
+        InferenceMetricsSnapshot(
+            total_attempts=1,
+            accepted=1,
+            uncertain=0,
+            failed=0,
+            fallback_used_count=2,
+            total_latency_ms=10.0,
+            average_latency_ms=10.0,
+            max_latency_ms=10.0,
+        )
+
+
