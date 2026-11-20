@@ -42,6 +42,10 @@ from src.schemas.model import (
     model_architecture_to_response,
 )
 
+from config.fallback_inference_config import (
+    FallbackInferenceConfig,
+)
+
 from tools.model.model_service import get_model_architecture
 from src.schemas.observability import InferenceMetricsResponse
 
@@ -54,16 +58,26 @@ async def lifespan(app: FastAPI):
     global inference_service
     global inference_metrics
 
-    inference_metrics = InferenceMetrics()
-
-    inference_service = create_orchestrated_inference_service(
-        metrics=inference_metrics,
-    )
-
-    yield
-
     inference_service = None
     inference_metrics = None
+
+    try:
+        inference_metrics = InferenceMetrics()
+
+        fallback_config = (
+            FallbackInferenceConfig.from_environment()
+        )
+
+        inference_service = create_orchestrated_inference_service(
+            metrics=inference_metrics,
+            fallback_config=fallback_config,
+        )
+
+        yield
+
+    finally:
+        inference_service = None
+        inference_metrics = None
 
 
 app = FastAPI(

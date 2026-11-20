@@ -326,3 +326,197 @@ def test_service_records_fallback_usage(
     assert snapshot.accepted == 1
     assert snapshot.fallback_used_count == 1
     assert snapshot.fallback_rate == 1.0
+
+
+def test_service_passes_configured_fallback_to_orchestration(
+    monkeypatch,
+):
+    primary_predictor = object()
+    fallback_predictor = object()
+
+    captured = {}
+
+    fallback_decision = SimpleNamespace(
+        status=SimpleNamespace(
+            value="accepted"
+        ),
+        fallback_used=True,
+    )
+
+    def fake_create_svhn_predict_fn(
+        *,
+        predictor,
+        image_bytes,
+    ):
+        def predict_fn():
+            return predictor, image_bytes
+
+        return predict_fn
+
+    def fake_run_orchestrated_inference(
+        **kwargs,
+    ):
+        captured.update(kwargs)
+        return fallback_decision
+
+    monkeypatch.setattr(
+        inference_service_module,
+        "create_svhn_predict_fn",
+        fake_create_svhn_predict_fn,
+    )
+
+    monkeypatch.setattr(
+        inference_service_module,
+        "run_orchestrated_inference",
+        fake_run_orchestrated_inference,
+    )
+
+    service = OrchestratedInferenceService(
+        predictor=primary_predictor,
+        config_service=create_config_service(),
+        fallback_predictor=fallback_predictor,
+        fallback_model_name="ann",
+    )
+
+    decision = service.predict(
+        b"valid-image"
+    )
+
+    assert decision is fallback_decision
+
+    assert (
+        captured["fallback_model_name"]
+        == "ann"
+    )
+
+    assert (
+        captured["fallback_predict_fn"]()
+        == (
+            fallback_predictor,
+            b"valid-image",
+        )
+    )
+
+
+def test_service_rejects_fallback_predictor_without_model_name():
+    with pytest.raises(
+        ValueError,
+        match=(
+            "fallback_predictor and fallback_model_name "
+            "must be configured together"
+        ),
+    ):
+        OrchestratedInferenceService(
+            predictor=object(),
+            config_service=create_config_service(),
+            fallback_predictor=object(),
+        )
+
+
+def test_service_rejects_fallback_model_name_without_predictor():
+    with pytest.raises(
+        ValueError,
+        match=(
+            "fallback_predictor and fallback_model_name "
+            "must be configured together"
+        ),
+    ):
+        OrchestratedInferenceService(
+            predictor=object(),
+            config_service=create_config_service(),
+            fallback_model_name="ann",
+        )
+
+
+def test_service_executes_fallback_for_low_confidence_primary():
+    primary_predictor = FakePredictor(
+        predicted_digit=3,
+        confidence=0.50,
+    )
+
+    fallback_predictor = FakePredictor(
+        predicted_digit=8,
+        confidence=0.98,
+    )
+
+    metrics = InferenceMetrics()
+
+    service = OrchestratedInferenceService(
+        predictor=primary_predictor,
+        config_service=create_config_service(
+            confidence_threshold=0.90,
+        ),
+        metrics=metrics,
+        fallback_predictor=fallback_predictor,
+        fallback_model_name="ann",
+    )
+
+    decision = service.predict(
+        b"valid-image"
+    )
+
+    snapshot = metrics.snapshot()
+
+    assert decision.selected_model == "ann"
+    assert decision.predicted_digit == 8
+    assert decision.confidence == 0.98
+    assert decision.status == DecisionStatus.ACCEPTED
+
+    assert decision.fallback_used is True
+    assert (
+        decision.fallback_reason
+        == "primary_low_confidence"
+    )
+
+    assert decision.review_required is False
+
+    assert snapshot.total_attempts == 1
+    assert snapshot.accepted == 1
+    assert snapshot.fallback_used_count == 1
+    assert snapshot.fallback_rate == 1.0
+
+
+def test_service_does_not_execute_fallback_when_primary_is_accepted():
+    class FailingIfCalledFallbackPredictor:
+        def predict(
+            self,
+            image_bytes: bytes,
+        ):
+            raise AssertionError(
+                "Fallback predictor should not be called."
+            )
+
+    primary_predictor = FakePredictor(
+        predicted_digit=7,
+        confidence=0.99,
+    )
+
+    metrics = InferenceMetrics()
+
+    service = OrchestratedInferenceService(
+        predictor=primary_predictor,
+        config_service=create_config_service(
+            confidence_threshold=0.90,
+        ),
+        metrics=metrics,
+        fallback_predictor=FailingIfCalledFallbackPredictor(),
+        fallback_model_name="ann",
+    )
+
+    decision = service.predict(
+        b"valid-image"
+    )
+
+    snapshot = metrics.snapshot()
+
+    assert decision.selected_model == "cnn"
+    assert decision.predicted_digit == 7
+    assert decision.status == DecisionStatus.ACCEPTED
+
+    assert decision.fallback_used is False
+    assert decision.fallback_reason is None
+
+    assert snapshot.total_attempts == 1
+    assert snapshot.accepted == 1
+    assert snapshot.fallback_used_count == 0
+    assert snapshot.fallback_rate == 0.0

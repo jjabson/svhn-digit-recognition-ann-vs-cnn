@@ -29,6 +29,27 @@ class OrchestratedInferenceService:
     config_service: InferenceConfigService
     metrics: InferenceMetrics | None = None
 
+    fallback_predictor: SVHNPredictor | None = None
+    fallback_model_name: str | None = None
+
+    def __post_init__(self) -> None:
+        fallback_predictor_configured = (
+                self.fallback_predictor is not None
+        )
+
+        fallback_model_configured = (
+                self.fallback_model_name is not None
+        )
+
+        if (
+                fallback_predictor_configured
+                != fallback_model_configured
+        ):
+            raise ValueError(
+                "fallback_predictor and fallback_model_name "
+                "must be configured together."
+            )
+
     @property
     def model_name(self) -> str:
         """
@@ -82,10 +103,20 @@ class OrchestratedInferenceService:
             image_bytes=image_bytes,
         )
 
+        fallback_predict_fn = None
+
+        if self.fallback_predictor is not None:
+            fallback_predict_fn = create_svhn_predict_fn(
+                predictor=self.fallback_predictor,
+                image_bytes=image_bytes,
+            )
+
         decision = run_orchestrated_inference(
             primary_model_name=config.model_name,
             primary_predict_fn=predict_fn,
             policy=policy,
+            fallback_model_name=self.fallback_model_name,
+            fallback_predict_fn=fallback_predict_fn,
         )
 
         if self.metrics is not None:

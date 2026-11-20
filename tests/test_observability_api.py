@@ -1,9 +1,13 @@
+import pytest
 from fastapi.testclient import TestClient
 
 import api.app as api_module
 from src.schemas.orchestration import (
     DecisionStatus,
     InferenceDecision,
+)
+from config.fallback_inference_config import (
+    FALLBACK_ENABLED_ENV,
 )
 
 def test_api_lifespan_wires_process_local_inference_metrics():
@@ -74,7 +78,7 @@ def test_inference_metrics_endpoint_returns_503_when_unavailable(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda *, metrics=None: None,
+        lambda *, metrics=None, fallback_config=None: None,
     )
 
     with TestClient(api_module.app) as client:
@@ -121,7 +125,7 @@ def test_inference_metrics_endpoint_reflects_orchestrated_prediction(
     monkeypatch.setattr(
         api_module,
         "create_orchestrated_inference_service",
-        lambda *, metrics=None: (
+        lambda *, metrics=None, fallback_config=None: (
             MetricsRecordingInferenceService(metrics)
         ),
     )
@@ -156,3 +160,68 @@ def test_inference_metrics_endpoint_reflects_orchestrated_prediction(
     assert body["max_latency_ms"] == 12.5
     assert body["fallback_used_count"] == 0
     assert body["fallback_rate"] == 0.0
+
+
+def test_api_startup_passes_disabled_fallback_config(
+    monkeypatch,
+):
+    captured = {}
+
+    monkeypatch.delenv(
+        FALLBACK_ENABLED_ENV,
+        raising=False,
+    )
+
+    def fake_create_service(
+        *,
+        metrics=None,
+        fallback_config=None,
+    ):
+        captured["metrics"] = metrics
+        captured["fallback_config"] = fallback_config
+        return None
+
+    monkeypatch.setattr(
+        api_module,
+        "create_orchestrated_inference_service",
+        fake_create_service,
+    )
+
+    with TestClient(api_module.app):
+        pass
+
+    fallback_config = captured["fallback_config"]
+
+    assert fallback_config is not None
+    assert fallback_config.enabled is False
+    assert fallback_config.model_name is None
+    assert fallback_config.model_path is None
+
+
+def test_api_lifespan_cleans_up_after_startup_failure(
+    monkeypatch,
+):
+    def failing_factory(
+        *,
+        metrics=None,
+        fallback_config=None,
+    ):
+        raise RuntimeError(
+            "simulated startup failure"
+        )
+
+    monkeypatch.setattr(
+        api_module,
+        "create_orchestrated_inference_service",
+        failing_factory,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated startup failure",
+    ):
+        with TestClient(api_module.app):
+            pass
+
+    assert api_module.inference_service is None
+    assert api_module.inference_metrics is None

@@ -1,3 +1,4 @@
+import pytest
 from config.inference_config_service import InferenceConfigService
 
 from src.orchestration.inference_service import OrchestratedInferenceService
@@ -8,6 +9,9 @@ from src.orchestration.service_factory import (
 from config.inference_config import (
     DEFAULT_INFERENCE_CONFIG,
     InferenceConfig,
+)
+from config.fallback_inference_config import (
+    FallbackInferenceConfig,
 )
 
 from src.observability.metrics import InferenceMetrics
@@ -124,3 +128,165 @@ def test_service_factory_allows_metrics_to_be_omitted(
     )
 
     assert service.metrics is None
+
+
+def test_service_factory_injects_fallback_predictor(
+    monkeypatch,
+):
+    class FakePredictor:
+        pass
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    fallback_predictor = FakePredictor()
+
+    service = create_orchestrated_inference_service(
+        fallback_predictor=fallback_predictor,
+        fallback_model_name="ann",
+    )
+
+    assert service.fallback_predictor is fallback_predictor
+    assert service.fallback_model_name == "ann"
+
+
+def test_service_factory_defaults_to_no_fallback(
+    monkeypatch,
+):
+    class FakePredictor:
+        pass
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    service = create_orchestrated_inference_service()
+
+    assert service.fallback_predictor is None
+    assert service.fallback_model_name is None
+
+
+def test_service_factory_loads_enabled_fallback_config(
+    monkeypatch,
+    tmp_path,
+):
+    created_paths = []
+
+    class FakePredictor:
+        def __init__(
+            self,
+            model_path=None,
+        ):
+            created_paths.append(model_path)
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    fallback_path = (
+        tmp_path / "fallback.keras"
+    )
+
+    fallback_path.write_bytes(
+        b"fake-model"
+    )
+
+    fallback_config = FallbackInferenceConfig(
+        enabled=True,
+        model_name="ann",
+        model_path=fallback_path,
+    )
+
+    service = create_orchestrated_inference_service(
+        fallback_config=fallback_config,
+    )
+
+    assert len(created_paths) == 2
+
+    assert created_paths[0] is None
+    assert created_paths[1] == fallback_path
+
+    assert service.fallback_model_name == "ann"
+
+    assert isinstance(
+        service.fallback_predictor,
+        FakePredictor,
+    )
+
+
+def test_service_factory_does_not_load_disabled_fallback_config(
+    monkeypatch,
+):
+    created_paths = []
+
+    class FakePredictor:
+        def __init__(
+            self,
+            model_path=None,
+        ):
+            created_paths.append(model_path)
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    fallback_config = FallbackInferenceConfig(
+        enabled=False,
+    )
+
+    service = create_orchestrated_inference_service(
+        fallback_config=fallback_config,
+    )
+
+    assert created_paths == [None]
+
+    assert service.fallback_predictor is None
+    assert service.fallback_model_name is None
+
+
+def test_service_factory_rejects_explicit_and_automatic_fallback(
+    monkeypatch,
+    tmp_path,
+):
+    class FakePredictor:
+        def __init__(
+            self,
+            model_path=None,
+        ):
+            pass
+
+    monkeypatch.setattr(
+        "src.orchestration.service_factory.SVHNPredictor",
+        FakePredictor,
+    )
+
+    fallback_path = (
+        tmp_path / "fallback.keras"
+    )
+
+    fallback_path.write_bytes(
+        b"fake-model"
+    )
+
+    fallback_config = FallbackInferenceConfig(
+        enabled=True,
+        model_name="ann",
+        model_path=fallback_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "fallback_predictor cannot be supplied"
+        ),
+    ):
+        create_orchestrated_inference_service(
+            fallback_predictor=FakePredictor(),
+            fallback_model_name="ann",
+            fallback_config=fallback_config,
+        )

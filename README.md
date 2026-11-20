@@ -39,7 +39,7 @@ and controlled software architecture.
 - Automated Typst technical-report generation.
 - Model architecture inspection and automated evaluation intelligence.
 - Dockerized API runtime.
-- **401 passing automated tests** covering preprocessing, inference, orchestration,
+- **419 passing automated tests** covering preprocessing, inference, orchestration,
   reliability, MCP interoperability, controlled actions, HITL approval,
   persistence, restart recovery, API behavior, and real-model integration.
 - Trusted human-in-the-loop authorization for controlled runtime changes,
@@ -56,6 +56,10 @@ and controlled software architecture.
 - Independent security verification confirmed that external MCP consumers can
   request and inspect controlled actions but cannot approve, reject, resume,
   or self-authorize them.
+- optional production fallback-model execution
+- environment-driven fallback model configuration and validation
+- fallback activation for both FastAPI and MCP serving runtimes
+- fail-safe startup cleanup for FastAPI runtime initialization
 
 ---
 
@@ -1546,14 +1550,18 @@ Several design rules guide the evolution of the project:
 - `api` and `tools` included in setuptools package discovery
 - PyCharm project interpreter aligned with repository `.venv`
 - both `pytest` and `python -m pytest` verified
-- - **401 passing automated tests**
+- **419 passing automated tests**
+- - optional production fallback-model execution
+- environment-driven fallback model configuration and validation
+- fallback activation for both FastAPI and MCP serving runtimes
+- fail-safe startup cleanup for FastAPI runtime initialization
 
 ### Next — Production Hardening
 
 - continue strengthening production authentication and authorization boundaries
 - expand durable audit/event history
 - deepen inference decision and operational audit records
-- extend production fallback execution and runtime resilience
+- add and validate a production-trained secondary fallback model artifact
 - strengthen multi-process/runtime coordination
 
 

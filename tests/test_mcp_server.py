@@ -9,6 +9,8 @@ from mcp.client.stdio import (
     stdio_client,
 )
 
+import mcp_server.server as server_module
+
 def create_server_params() -> StdioServerParameters:
     """
     Return the stdio configuration used to launch the MCP server
@@ -404,3 +406,9 @@ def test_mcp_tool_errors() -> None:
     asyncio.run(
         run_with_mcp_session(check_tool_errors)
     )
+
+
+def test_mcp_fallback_config_is_disabled_by_default():
+    assert server_module.FALLBACK_INFERENCE_CONFIG.enabled is False
+    assert server_module.FALLBACK_INFERENCE_CONFIG.model_name is None
+    assert server_module.FALLBACK_INFERENCE_CONFIG.model_path is None

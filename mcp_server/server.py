@@ -61,11 +61,17 @@ from src.observability.metrics import InferenceMetrics
 from src.observability.controlled_action_metrics import (
     ControlledActionMetrics,
 )
+from config.fallback_inference_config import (
+    FallbackInferenceConfig,
+)
 
 MCP_HTTP_AUTH_CONFIG = (
     McpHttpAuthConfig.from_environment()
 )
 
+FALLBACK_INFERENCE_CONFIG = (
+    FallbackInferenceConfig.from_environment()
+)
 
 def create_mcp_server() -> MCPServer:
     if not MCP_HTTP_AUTH_CONFIG.enabled:
@@ -125,6 +131,7 @@ inference_config_service = InferenceConfigService(
 inference_service = create_orchestrated_inference_service(
     config_service=inference_config_service,
     metrics=inference_metrics,
+    fallback_config=FALLBACK_INFERENCE_CONFIG,
 )
 
 approval_checkpointer = create_approval_checkpointer()
